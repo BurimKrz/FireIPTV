@@ -24,6 +24,7 @@ import com.fireiptv.core.data.settings.StartMode
 fun SettingsScreen(
     onOpenPlaylists: () -> Unit,
     onOpenGroups: () -> Unit,
+    onOpenAccount: () -> Unit,
     appVersion: String,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
@@ -50,6 +51,14 @@ fun SettingsScreen(
             onClick = onOpenPlaylists,
             modifier = rowModifier.focusRequester(firstRow),
         )
+        if (state.hasAccount) {
+            SettingRow(
+                title = "Account",
+                detail = "Status, expiry date and connections, from your provider",
+                onClick = onOpenAccount,
+                modifier = rowModifier,
+            )
+        }
         SettingRow(
             title = "Groups",
             detail = if (state.hiddenGroupCount == 0) {

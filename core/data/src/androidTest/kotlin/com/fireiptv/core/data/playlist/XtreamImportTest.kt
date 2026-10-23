@@ -3,9 +3,13 @@ package com.fireiptv.core.data.playlist
 import androidx.paging.PagingSource
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.fireiptv.core.data.account.AccountRepository
+import com.fireiptv.core.data.account.AccountResult
 import com.fireiptv.core.data.db.ChannelEntity
 import com.fireiptv.core.data.db.PlayerDatabase
 import com.fireiptv.core.data.db.PlaylistEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import okhttp3.OkHttpClient
@@ -31,11 +35,11 @@ class XtreamImportTest {
     private var account = """{"user_info":{"auth":1,"status":"Active","allowed_output_formats":["m3u8","ts"]},"server_info":{"port":"80"}}"""
 
     // Real panels mix types: ids as numbers or strings, false/null for missing values.
-    private val categories = """[
+    private var categories = """[
         {"category_id":"7","category_name":"Sports","parent_id":0},
         {"category_id":"3","category_name":"News","parent_id":0}
     ]"""
-    private val streams = """[
+    private var streams = """[
         {"num":1,"name":"News One","stream_type":"live","stream_id":101,"stream_icon":"http://logos.example/1.png","epg_channel_id":null,"category_id":"3","tv_archive":0,"direct_source":""},
         {"num":2,"name":"Sport HD","stream_type":"live","stream_id":"202","stream_icon":"","epg_channel_id":"sport.hd","category_id":7,"category_ids":[7],"tv_archive":false},
         {"num":3,"name":"Mystery","stream_type":"live","stream_id":303,"category_id":"99"},
@@ -144,5 +148,46 @@ class XtreamImportTest {
         importer.import(id)
         assertEquals(3, db.channelDao().count(id))
         assertEquals(1, db.playlistDao().observeSummaries().first().size)
+    }
+
+    @Test
+    fun providerAccountInfoIsLeftOut() = runTest {
+        categories = """[
+            {"category_id":"1","category_name":"Accout Information"},
+            {"category_id":"3","category_name":"News"}
+        ]"""
+        streams = """[
+            {"name":"Account Information","stream_type":"live","stream_id":1,"category_id":"1"},
+            {"name":"ACCOUNT INFO","stream_type":"live","stream_id":2,"category_id":"3"},
+            {"name":"News One","stream_type":"live","stream_id":101,"category_id":"3"}
+        ]"""
+        val id = addPlaylist()
+
+        val outcome = importer.import(id)
+
+        assertEquals(ImportOutcome.Imported(channels = 1, groups = 1, skippedLines = 0), outcome)
+        assertEquals(listOf("News"), db.groupDao().observeGroups(id).first().map { it.title })
+    }
+
+    @Test
+    fun accountDetailsAreRead() = runTest {
+        account = """{"user_info":{"username":"user","auth":1,"status":"Active","exp_date":"1814918400","is_trial":"0",
+            "active_cons":0,"max_connections":"1","created_at":"1729641600","allowed_output_formats":["ts"]}}"""
+        addPlaylist()
+        val repository = AccountRepository(
+            db,
+            PlaylistRepository(db, importer, CoroutineScope(Dispatchers.Unconfined)),
+            OkHttpClient(),
+        )
+
+        val result = repository.load() as AccountResult.Loaded
+
+        assertEquals("user", result.info.username)
+        assertEquals("Active", result.info.status)
+        assertEquals(1_814_918_400L, result.info.expiresAt)
+        assertEquals(0, result.info.activeConnections)
+        assertEquals(1, result.info.maxConnections)
+        assertEquals(false, result.info.isTrial)
+        assertEquals(1_729_641_600L, result.info.createdAt)
     }
 }

@@ -19,6 +19,7 @@ The build plan, phases and what's done so far: [docs/PLAN.md](docs/PLAN.md).
 | Search by channel name, on the TV (no network) | |
 | Settings: hide groups, channel start Fast/Stable | |
 | Channel logos, downloaded once and kept (can be turned off) | |
+| Account details from an Xtream login (Settings → Account) | |
 
 ## Yes, you can install it as an APK
 
@@ -79,7 +80,7 @@ The first screen asks for a playlist URL. Typing a long URL with the remote is s
 adb shell "am start -n com.fireiptv.player/.MainActivity --es playlist_url 'http://example.com/get.php?username=...&password=...'"
 ```
 
-The app opens on the add screen with the URL filled in and the **Import** button focused; press OK. An Xtream `get.php` link is detected automatically and imported through the Xtream API (live channels only).
+The app opens on the add screen with the URL filled in and the **Import** button focused; press OK. An Xtream `get.php` link is detected automatically and imported through the Xtream API (live channels only). The provider's "Account Information" channel is left out of the lists; the same details are under Settings → Account.
 
 > Never commit your playlist URL: it contains your username and password. Keep it in `docs/` (git-ignored).
 
@@ -97,7 +98,7 @@ The app opens on the add screen with the URL filled in and the **Import** button
 | Long-press OK, or Menu (☰), on a channel | Adds it to Favourites, or removes it (★ marks favourites) |
 | Left from the channel list | Back to the group you came from |
 | **Search** button (top right) | Search channel names as you type; case and accents don't matter ("kosove" finds "KOSOVË") |
-| **Settings** button (top right) | Playlists (refresh, delete, add), Groups (hide the ones you never watch), Channel start (Fast or Stable), Channel logos (On or Off) |
+| **Settings** button (top right) | Playlists (refresh, delete, add), Account (status, expiry, connections), Groups (hide the ones you never watch), Channel start (Fast or Stable), Channel logos (On or Off) |
 | Back on home | Leaves the app |
 
 **Search**

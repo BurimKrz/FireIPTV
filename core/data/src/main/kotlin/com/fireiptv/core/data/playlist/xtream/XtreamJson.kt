@@ -3,7 +3,18 @@ package com.fireiptv.core.data.playlist.xtream
 import android.util.JsonReader
 import android.util.JsonToken
 
-internal data class XtreamUserInfo(val authenticated: Boolean, val status: String?, val formats: List<String>)
+internal data class XtreamUserInfo(
+    val authenticated: Boolean,
+    val status: String?,
+    val formats: List<String>,
+    val username: String? = null,
+    /** Expiry as epoch seconds; null for accounts that don't expire. */
+    val expiresAt: Long? = null,
+    val isTrial: Boolean = false,
+    val activeConnections: Int? = null,
+    val maxConnections: Int? = null,
+    val createdAt: Long? = null,
+)
 
 internal data class XtreamCategory(val id: String, val name: String)
 
@@ -29,15 +40,37 @@ internal object XtreamJson {
                 var auth = false
                 var status: String? = null
                 var formats = emptyList<String>()
+                var username: String? = null
+                var expires: String? = null
+                var trial: String? = null
+                var active: String? = null
+                var max: String? = null
+                var created: String? = null
                 reader.readObject { field ->
                     when (field) {
                         "auth" -> auth = reader.nextScalar() == "1"
                         "status" -> status = reader.nextScalar()
                         "allowed_output_formats" -> formats = reader.readStrings()
+                        "username" -> username = reader.nextScalar()
+                        "exp_date" -> expires = reader.nextScalar()
+                        "is_trial" -> trial = reader.nextScalar()
+                        "active_cons" -> active = reader.nextScalar()
+                        "max_connections" -> max = reader.nextScalar()
+                        "created_at" -> created = reader.nextScalar()
                         else -> reader.skipValue()
                     }
                 }
-                info = XtreamUserInfo(auth, status, formats)
+                info = XtreamUserInfo(
+                    authenticated = auth,
+                    status = status,
+                    formats = formats,
+                    username = username,
+                    expiresAt = expires?.toLongOrNull()?.takeIf { it > 0 },
+                    isTrial = trial == "1",
+                    activeConnections = active?.toIntOrNull(),
+                    maxConnections = max?.toIntOrNull(),
+                    createdAt = created?.toLongOrNull()?.takeIf { it > 0 },
+                )
             } else {
                 reader.skipValue()
             }

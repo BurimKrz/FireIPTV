@@ -74,6 +74,9 @@ interface PlaylistDao {
     @Query("SELECT EXISTS(SELECT 1 FROM playlist WHERE isStaging = 0)")
     suspend fun hasAny(): Boolean
 
+    @Query("SELECT * FROM playlist WHERE isStaging = 0 ORDER BY id LIMIT 1")
+    suspend fun first(): PlaylistEntity?
+
     @Query("DELETE FROM playlist WHERE id = :id")
     suspend fun delete(id: Long)
 

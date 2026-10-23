@@ -102,7 +102,11 @@ class PlaylistImporter @Inject constructor(
 
             val written = writeChannels(playlist, inPlace, emptyMessage = "No channels found. Is this an M3U playlist?") { sink ->
                 val result = M3uParser.parse(source, onHeader = { epgUrl = it.epgUrls.firstOrNull() }) { entry ->
-                    if (entry.isXtreamVod()) sink.skipVod() else sink.add(entry, groupKey = entry.groupTitle)
+                    when {
+                        entry.isXtreamVod() -> sink.skipVod()
+                        isProviderAccountInfo(entry.groupTitle) || isProviderAccountInfo(entry.name) -> Unit
+                        else -> sink.add(entry, groupKey = entry.groupTitle)
+                    }
                     if (sink.flushedBatch) onProgress(ImportProgress(counter.bytesRead, body.contentLength(), sink.count))
                 }
                 skippedLines = result.skippedLines
@@ -132,7 +136,9 @@ class PlaylistImporter @Inject constructor(
         val extension = account.preferredFormat?.takeIf { it in user.formats || user.formats.isEmpty() }
             ?: if ("ts" in user.formats || user.formats.isEmpty()) "ts" else "m3u8"
 
-        val categories = fetchJson(account.apiUrl("get_live_categories"), playlist) { XtreamJson.readCategories(it) }
+        val allCategories = fetchJson(account.apiUrl("get_live_categories"), playlist) { XtreamJson.readCategories(it) }
+        val (infoCategories, categories) = allCategories.partition { isProviderAccountInfo(it.name) }
+        val infoCategoryIds = infoCategories.map { it.id }.toSet()
         val categoryNames = categories.associate { it.id to it.name }
         val categoryOrder = categories.withIndex().associate { (index, category) -> category.id to index }
 
@@ -142,6 +148,7 @@ class PlaylistImporter @Inject constructor(
             fetchJson(account.apiUrl("get_live_streams"), playlist) { reader ->
                 XtreamJson.readLiveStreams(reader) { stream ->
                     if (stream.type != null && stream.type != "live") return@readLiveStreams
+                    if (stream.categoryId in infoCategoryIds || isProviderAccountInfo(stream.name)) return@readLiveStreams
                     val entry = M3uEntry(
                         name = stream.name.ifEmpty { "Channel ${stream.streamId}" },
                         url = account.liveStreamUrl(stream.streamId, extension),

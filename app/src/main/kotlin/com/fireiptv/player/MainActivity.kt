@@ -26,6 +26,7 @@ import com.fireiptv.feature.browse.BrowseScreen
 import com.fireiptv.feature.browse.search.SearchScreen
 import com.fireiptv.feature.player.PlayerScreen
 import com.fireiptv.feature.player.PlayerViewModel
+import com.fireiptv.feature.settings.account.AccountScreen
 import com.fireiptv.feature.settings.groups.GroupsScreen
 import com.fireiptv.feature.settings.home.SettingsScreen
 import com.fireiptv.feature.settings.playlists.AddPlaylistScreen
@@ -71,6 +72,7 @@ private object Routes {
     const val SEARCH = "search"
     const val SETTINGS = "settings"
     const val GROUPS = "settings/groups"
+    const val ACCOUNT = "settings/account"
     const val PLAYER = "player/{${PlayerViewModel.ARG_CHANNEL_ID}}?list={${PlayerViewModel.ARG_LIST}}"
 
     fun player(channelId: Long, list: ChannelList) = "player/$channelId?list=${list.encode()}"
@@ -114,11 +116,15 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
             SettingsScreen(
                 onOpenPlaylists = { navController.navigate(Routes.PLAYLISTS) },
                 onOpenGroups = { navController.navigate(Routes.GROUPS) },
+                onOpenAccount = { navController.navigate(Routes.ACCOUNT) },
                 appVersion = BuildConfig.VERSION_NAME,
             )
         }
         composable(Routes.GROUPS) {
             GroupsScreen()
+        }
+        composable(Routes.ACCOUNT) {
+            AccountScreen()
         }
         composable(Routes.PLAYLISTS) {
             PlaylistsScreen(onAddPlaylist = { navController.navigate(Routes.ADD_PLAYLIST) })

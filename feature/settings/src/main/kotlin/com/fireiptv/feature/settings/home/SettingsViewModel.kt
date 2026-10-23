@@ -2,6 +2,7 @@ package com.fireiptv.feature.settings.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fireiptv.core.data.account.AccountRepository
 import com.fireiptv.core.data.channel.ChannelRepository
 import com.fireiptv.core.data.playlist.PlaylistRepository
 import com.fireiptv.core.data.settings.SettingsRepository
@@ -26,6 +27,8 @@ data class SettingsUiState(
     val hiddenGroupCount: Int = 0,
     val startMode: StartMode = StartMode.FAST,
     val logosEnabled: Boolean = true,
+    /** The playlist is an Xtream login, so there are account details to show. */
+    val hasAccount: Boolean = false,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -33,6 +36,7 @@ data class SettingsUiState(
 class SettingsViewModel @Inject constructor(
     playlistRepository: PlaylistRepository,
     channelRepository: ChannelRepository,
+    accountRepository: AccountRepository,
     private val settings: SettingsRepository,
 ) : ViewModel() {
 
@@ -42,7 +46,13 @@ class SettingsViewModel @Inject constructor(
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else channelRepository.groupSettings(id) }
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(playlistRepository.playlists, groups, settings.startMode, settings.logosEnabled) { playlists, groups, startMode, logos ->
+        combine(
+            playlistRepository.playlists,
+            groups,
+            settings.startMode,
+            settings.logosEnabled,
+            accountRepository.available,
+        ) { playlists, groups, startMode, logos, hasAccount ->
             SettingsUiState(
                 playlistCount = playlists.size,
                 channelCount = playlists.sumOf { it.channelCount },
@@ -50,6 +60,7 @@ class SettingsViewModel @Inject constructor(
                 hiddenGroupCount = groups.count { it.hidden },
                 startMode = startMode,
                 logosEnabled = logos,
+                hasAccount = hasAccount,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
