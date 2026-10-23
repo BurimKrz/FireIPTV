@@ -33,7 +33,7 @@ import javax.inject.Inject
 data class GroupRow(val list: ChannelList, val title: String, val channelCount: Int)
 
 @Immutable
-data class ChannelRow(val id: Long, val number: Int, val name: String, val favorite: Boolean)
+data class ChannelRow(val id: Long, val number: Int, val name: String, val logoUrl: String?, val favorite: Boolean)
 
 /** Where focus goes when coming back from the player: [index] in the current channel list. */
 data class ReturnTarget(val channelId: Long, val index: Int)
@@ -131,5 +131,5 @@ class BrowseViewModel @Inject constructor(
     // Channels without a tvg-chno are numbered by their place in the playlist, which stays the
     // same in every group.
     private fun ChannelListItem.toRow() =
-        ChannelRow(id = id, number = number ?: (sortOrder + 1), name = name, favorite = favorite)
+        ChannelRow(id = id, number = number ?: (sortOrder + 1), name = name, logoUrl = logoUrl, favorite = favorite)
 }

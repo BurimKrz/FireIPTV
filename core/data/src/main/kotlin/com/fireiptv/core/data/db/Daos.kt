@@ -26,7 +26,14 @@ data class GroupSetting(val id: Long, val title: String, val channelCount: Int, 
 data class GroupSummary(val id: Long, val title: String, val channelCount: Int)
 
 /** The columns the channel list shows, so paging doesn't load stream URLs and catch-up fields. */
-data class ChannelListItem(val id: Long, val name: String, val number: Int?, val sortOrder: Int, val favorite: Boolean)
+data class ChannelListItem(
+    val id: Long,
+    val name: String,
+    val number: Int?,
+    val sortOrder: Int,
+    val logoUrl: String?,
+    val favorite: Boolean,
+)
 
 /** A search result: a channel with its group, so results from many groups can be told apart. */
 data class ChannelSearchItem(
@@ -34,6 +41,7 @@ data class ChannelSearchItem(
     val name: String,
     val number: Int?,
     val sortOrder: Int,
+    val logoUrl: String?,
     val groupId: Long?,
     val groupTitle: String?,
     val favorite: Boolean,
@@ -162,7 +170,7 @@ interface ChannelDao {
 
     @Query(
         """
-        SELECT id, name, number, sortOrder, $IS_FAVORITE FROM channel c
+        SELECT id, name, number, sortOrder, logoUrl, $IS_FAVORITE FROM channel c
         WHERE playlistId = :playlistId AND $NOT_IN_HIDDEN_GROUP
         ORDER BY sortOrder
         """,
@@ -172,7 +180,7 @@ interface ChannelDao {
     // playlistId keeps the query on the (playlistId, groupId, sortOrder) index, so it needs no sort.
     @Query(
         """
-        SELECT id, name, number, sortOrder, $IS_FAVORITE FROM channel c
+        SELECT id, name, number, sortOrder, logoUrl, $IS_FAVORITE FROM channel c
         WHERE playlistId = :playlistId AND groupId = :groupId
         ORDER BY sortOrder
         """,
@@ -182,7 +190,7 @@ interface ChannelDao {
     /** Channels of one playlist whose name matches the FTS [query], in playlist order. */
     @Query(
         """
-        SELECT c.id, c.name, c.number, c.sortOrder, c.groupId, g.title AS groupTitle, $IS_FAVORITE
+        SELECT c.id, c.name, c.number, c.sortOrder, c.logoUrl, c.groupId, g.title AS groupTitle, $IS_FAVORITE
         FROM channel_fts
         JOIN channel c ON c.id = channel_fts.rowid
         LEFT JOIN channel_group g ON g.id = c.groupId

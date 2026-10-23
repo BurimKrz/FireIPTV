@@ -14,4 +14,5 @@ dependencies {
     api(libs.tv.material)
     // tv-material has no text fields; Material 3's are the recommended stand-in on TV.
     api(libs.compose.material3)
+    implementation(libs.coil.compose)
 }

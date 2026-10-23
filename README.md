@@ -10,14 +10,15 @@ The build plan, phases and what's done so far: [docs/PLAN.md](docs/PLAN.md).
 
 | Works now | Not yet |
 | --- | --- |
-| Add a playlist by URL (M3U or Xtream `get.php` link) | Channel logos |
-| Xtream import of live channels only (~0.7 MB per refresh) | Parental PIN |
+| Add a playlist by URL (M3U or Xtream `get.php` link) | Parental PIN |
+| Xtream import of live channels only (~0.7 MB per refresh) | |
 | Playlists screen: refresh, delete | |
 | Home: groups + channel list, D-pad navigation | |
 | Full-screen live TV (MPEG-TS and HLS), zapping with Up/Down | |
 | Favourites and recently watched, kept across refreshes | |
 | Search by channel name, on the TV (no network) | |
 | Settings: hide groups, channel start Fast/Stable | |
+| Channel logos, downloaded once and kept (can be turned off) | |
 
 ## Yes, you can install it as an APK
 
@@ -96,7 +97,7 @@ The app opens on the add screen with the URL filled in and the **Import** button
 | Long-press OK, or Menu (☰), on a channel | Adds it to Favourites, or removes it (★ marks favourites) |
 | Left from the channel list | Back to the group you came from |
 | **Search** button (top right) | Search channel names as you type; case and accents don't matter ("kosove" finds "KOSOVË") |
-| **Settings** button (top right) | Playlists (refresh, delete, add), Groups (hide the ones you never watch), Channel start (Fast or Stable) |
+| **Settings** button (top right) | Playlists (refresh, delete, add), Groups (hide the ones you never watch), Channel start (Fast or Stable), Channel logos (On or Off) |
 | Back on home | Leaves the app |
 
 **Search**
@@ -118,7 +119,7 @@ The app opens on the add screen with the URL filled in and the **Import** button
 | Play/Pause | Stops the stream (no data used) / starts it again |
 | Back | Returns to the list, on the channel you were watching |
 
-Refresh only runs when you press it. Nothing updates in the background, and the stream closes as soon as you leave the player or press Home.
+Refresh only runs when you press it. Nothing updates in the background, and the stream closes as soon as you leave the player or press Home. Each channel logo downloads once (about 25 KB) and is kept in a 50 MB cache; logos for rows you scroll past are not fetched, and turning logos off in Settings stops all logo downloads.
 
 ## Run on the emulator (development)
 

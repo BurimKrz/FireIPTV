@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -49,6 +50,8 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.playlist.ImportState
+import com.fireiptv.core.ui.ChannelLogo
+import com.fireiptv.core.ui.rememberScrollIdle
 import kotlinx.coroutines.delay
 
 @Composable
@@ -212,6 +215,7 @@ private fun ChannelsColumn(
         // A fresh list state per group, so a new group starts at its top.
         val listState = remember(state.selectedList) { LazyListState() }
         val returnFocus = remember { FocusRequester() }
+        val listIdle by rememberScrollIdle(listState)
         LaunchedEffect(returnTarget) {
             val target = returnTarget ?: return@LaunchedEffect
             listState.scrollToItem(target.index)
@@ -242,6 +246,7 @@ private fun ChannelsColumn(
                         channel,
                         onClick = { onPlayChannel(channel.id) },
                         onToggleFavorite = { onToggleFavorite(channel.id) },
+                        logosMayDownload = listIdle,
                         modifier = if (channel.id == returnTarget?.channelId) Modifier.focusRequester(returnFocus) else Modifier,
                     )
                 }
@@ -255,6 +260,7 @@ private fun ChannelItem(
     channel: ChannelRow,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
+    logosMayDownload: Boolean,
     modifier: Modifier = Modifier,
 ) {
     DenseListItem(
@@ -263,12 +269,17 @@ private fun ChannelItem(
         // Long-press OK or the remote's Menu (☰) button adds or removes a favourite.
         onLongClick = onToggleFavorite,
         headlineContent = {
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     channel.number.toString(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     modifier = Modifier.width(72.dp),
+                )
+                ChannelLogo(
+                    channel.logoUrl,
+                    Modifier.padding(end = 16.dp).size(width = 48.dp, height = 27.dp),
+                    mayDownload = logosMayDownload,
                 )
                 Box(Modifier.weight(1f)) {
                     Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis)

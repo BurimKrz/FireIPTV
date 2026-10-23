@@ -70,6 +70,16 @@ fun SettingsScreen(
             onClick = viewModel::toggleStartMode,
             modifier = rowModifier,
         )
+        SettingRow(
+            title = "Channel logos: " + if (state.logosEnabled) "On" else "Off",
+            detail = if (state.logosEnabled) {
+                "Each logo downloads once and is kept (up to 50 MB). OK to turn off: no logo downloads at all."
+            } else {
+                "No logos are shown or downloaded. OK to turn on."
+            },
+            onClick = viewModel::toggleLogos,
+            modifier = rowModifier,
+        )
         Text(
             "FireIPTV $appVersion",
             style = MaterialTheme.typography.bodySmall,

@@ -28,7 +28,13 @@ import javax.inject.Inject
 
 /** The channel in the banner: the one playing, or the one a zap is heading to. */
 @Immutable
-data class BannerChannel(val number: Int, val name: String, val listTitle: String, val favorite: Boolean = false)
+data class BannerChannel(
+    val number: Int,
+    val name: String,
+    val listTitle: String,
+    val logoUrl: String?,
+    val favorite: Boolean = false,
+)
 
 data class PlayerUiState(
     val channel: BannerChannel? = null,
@@ -188,7 +194,12 @@ class PlayerViewModel @Inject constructor(
     private fun show(channel: ChannelEntity) {
         target = channel
         bannerTarget.value = channel
-        banner.value = BannerChannel(number = channel.number ?: (channel.sortOrder + 1), name = channel.name, listTitle = listTitle)
+        banner.value = BannerChannel(
+            number = channel.number ?: (channel.sortOrder + 1),
+            name = channel.name,
+            listTitle = listTitle,
+            logoUrl = channel.logoUrl,
+        )
         showBannerForAWhile()
     }
 

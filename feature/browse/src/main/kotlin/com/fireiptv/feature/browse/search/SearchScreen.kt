@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
@@ -43,6 +45,9 @@ import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.channel.ChannelList
+import com.fireiptv.core.ui.ChannelLogo
+import com.fireiptv.core.ui.LocalLogosEnabled
+import com.fireiptv.core.ui.rememberScrollIdle
 import com.fireiptv.core.ui.verticalDpadMovesFocus
 import androidx.compose.material3.Text as FieldText
 
@@ -60,6 +65,7 @@ fun SearchScreen(
     val fieldFocus = remember { FocusRequester() }
     val returnFocus = remember { FocusRequester() }
     val listState = rememberLazyListState()
+    val listIdle by rememberScrollIdle(listState)
 
     // Back from the player: focus the channel that was playing. Otherwise: the search field.
     var returnTo by remember { mutableStateOf<Long?>(null) }
@@ -136,6 +142,7 @@ fun SearchScreen(
                     result,
                     onClick = { onPlayChannel(result.id, result.zapList) },
                     onToggleFavorite = { viewModel.toggleFavorite(result.id) },
+                    logosMayDownload = listIdle,
                     modifier = if (result.id == returnTo) Modifier.focusRequester(returnFocus) else Modifier,
                 )
             }
@@ -148,19 +155,27 @@ private fun ResultItem(
     result: SearchResult,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
+    logosMayDownload: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    // The group line sits under the name, past the number and (when shown) the logo.
+    val groupIndent = if (LocalLogosEnabled.current && !result.logoUrl.isNullOrBlank()) 136.dp else 72.dp
     DenseListItem(
         selected = false,
         onClick = onClick,
         onLongClick = onToggleFavorite,
         headlineContent = {
-            Row {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     result.number.toString(),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     modifier = Modifier.width(72.dp),
+                )
+                ChannelLogo(
+                    result.logoUrl,
+                    Modifier.padding(end = 16.dp).size(width = 48.dp, height = 27.dp),
+                    mayDownload = logosMayDownload,
                 )
                 Box(Modifier.weight(1f)) {
                     Text(result.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -168,7 +183,7 @@ private fun ResultItem(
             }
         },
         supportingContent = result.groupTitle?.let { title ->
-            { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 72.dp)) }
+            { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = groupIndent)) }
         },
         trailingContent = if (result.favorite) {
             { Text("★") }

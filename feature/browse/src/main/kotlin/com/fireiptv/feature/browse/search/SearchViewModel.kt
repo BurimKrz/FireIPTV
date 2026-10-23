@@ -27,6 +27,7 @@ data class SearchResult(
     val id: Long,
     val number: Int,
     val name: String,
+    val logoUrl: String?,
     val groupTitle: String?,
     val favorite: Boolean,
     /** The list Up/Down zaps through when this result is played: its group. */
@@ -63,6 +64,7 @@ class SearchViewModel @Inject constructor(
                             id = it.id,
                             number = it.number ?: (it.sortOrder + 1),
                             name = it.name,
+                            logoUrl = it.logoUrl,
                             groupTitle = it.groupTitle,
                             favorite = it.favorite,
                             zapList = it.groupId?.let { group -> ChannelList.Group(group) } ?: ChannelList.All,

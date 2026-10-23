@@ -6,9 +6,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -17,7 +19,9 @@ import androidx.navigation.navArgument
 import androidx.tv.material3.Surface
 import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.playlist.PlaylistRepository
+import com.fireiptv.core.data.settings.SettingsRepository
 import com.fireiptv.core.ui.FireTheme
+import com.fireiptv.core.ui.LocalLogosEnabled
 import com.fireiptv.feature.browse.BrowseScreen
 import com.fireiptv.feature.browse.search.SearchScreen
 import com.fireiptv.feature.player.PlayerScreen
@@ -33,6 +37,7 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var playlistRepository: PlaylistRepository
+    @Inject lateinit var settingsRepository: SettingsRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -44,8 +49,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             FireTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
-                    AppNavigation(playlistRepository, prefillUrl)
+                val logosEnabled by settingsRepository.logosEnabled.collectAsStateWithLifecycle()
+                CompositionLocalProvider(LocalLogosEnabled provides logosEnabled) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        AppNavigation(playlistRepository, prefillUrl)
+                    }
                 }
             }
         }

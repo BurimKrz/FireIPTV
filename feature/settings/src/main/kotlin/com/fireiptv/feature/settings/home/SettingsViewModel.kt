@@ -25,6 +25,7 @@ data class SettingsUiState(
     val groupCount: Int = 0,
     val hiddenGroupCount: Int = 0,
     val startMode: StartMode = StartMode.FAST,
+    val logosEnabled: Boolean = true,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -41,15 +42,20 @@ class SettingsViewModel @Inject constructor(
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else channelRepository.groupSettings(id) }
 
     val uiState: StateFlow<SettingsUiState> =
-        combine(playlistRepository.playlists, groups, settings.startMode) { playlists, groups, startMode ->
+        combine(playlistRepository.playlists, groups, settings.startMode, settings.logosEnabled) { playlists, groups, startMode, logos ->
             SettingsUiState(
                 playlistCount = playlists.size,
                 channelCount = playlists.sumOf { it.channelCount },
                 groupCount = groups.size,
                 hiddenGroupCount = groups.count { it.hidden },
                 startMode = startMode,
+                logosEnabled = logos,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
+
+    fun toggleLogos() {
+        viewModelScope.launch { settings.setLogosEnabled(!settings.logosEnabled.value) }
+    }
 
     fun toggleStartMode() {
         val next = if (settings.startMode.value == StartMode.FAST) StartMode.STABLE else StartMode.FAST

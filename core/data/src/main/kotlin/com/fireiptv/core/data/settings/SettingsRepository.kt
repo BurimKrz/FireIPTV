@@ -3,6 +3,7 @@ package com.fireiptv.core.data.settings
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -32,17 +33,28 @@ class SettingsRepository @Inject constructor(
 ) {
     private val store = context.settingsStore
 
-    val startMode: StateFlow<StartMode> = store.data
-        // An unreadable settings file falls back to defaults instead of crashing the app.
-        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+    // An unreadable settings file falls back to defaults instead of crashing the app.
+    private val prefs = store.data.catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+
+    val startMode: StateFlow<StartMode> = prefs
         .map { prefs -> prefs[START_MODE]?.let { name -> StartMode.entries.firstOrNull { it.name == name } } ?: StartMode.FAST }
         .stateIn(scope, SharingStarted.Eagerly, StartMode.FAST)
+
+    /** Channel logos; off means the app makes no image requests at all. */
+    val logosEnabled: StateFlow<Boolean> = prefs
+        .map { it[LOGOS_ENABLED] ?: true }
+        .stateIn(scope, SharingStarted.Eagerly, true)
 
     suspend fun setStartMode(mode: StartMode) {
         store.edit { it[START_MODE] = mode.name }
     }
 
+    suspend fun setLogosEnabled(enabled: Boolean) {
+        store.edit { it[LOGOS_ENABLED] = enabled }
+    }
+
     private companion object {
         val START_MODE = stringPreferencesKey("start_mode")
+        val LOGOS_ENABLED = booleanPreferencesKey("logos_enabled")
     }
 }

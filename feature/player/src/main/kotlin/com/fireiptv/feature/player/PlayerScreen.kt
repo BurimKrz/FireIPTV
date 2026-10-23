@@ -42,6 +42,7 @@ import androidx.media3.ui.compose.ContentFrame
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.fireiptv.core.player.PlaybackStatus
+import com.fireiptv.core.ui.ChannelLogo
 
 /**
  * Full-screen live TV. Up/Down zap through the list the channel was opened from (CH+/CH- too),
@@ -132,6 +133,7 @@ private fun Banner(channel: BannerChannel, lastZapMs: Long?) {
     ) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
             Text(channel.number.toString(), style = MaterialTheme.typography.displaySmall, color = Color.White)
+            ChannelLogo(channel.logoUrl, Modifier.size(width = 96.dp, height = 54.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     if (channel.favorite) "★ ${channel.name}" else channel.name,

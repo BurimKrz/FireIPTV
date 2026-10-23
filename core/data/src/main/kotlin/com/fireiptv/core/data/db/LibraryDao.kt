@@ -48,7 +48,7 @@ interface LibraryDao {
 
     @Query(
         """
-        SELECT c.id, c.name, c.number, c.sortOrder, 1 AS favorite FROM favorite f
+        SELECT c.id, c.name, c.number, c.sortOrder, c.logoUrl, 1 AS favorite FROM favorite f
         JOIN channel c ON c.id = (SELECT MIN(id) FROM channel WHERE playlistId = f.playlistId AND streamUrl = f.streamUrl)
         WHERE f.playlistId = :playlistId
         ORDER BY f.sortOrder
@@ -58,7 +58,7 @@ interface LibraryDao {
 
     @Query(
         """
-        SELECT c.id, c.name, c.number, c.sortOrder, $IS_FAVORITE FROM recent r
+        SELECT c.id, c.name, c.number, c.sortOrder, c.logoUrl, $IS_FAVORITE FROM recent r
         JOIN channel c ON c.id = (SELECT MIN(id) FROM channel WHERE playlistId = r.playlistId AND streamUrl = r.streamUrl)
         WHERE r.playlistId = :playlistId
         ORDER BY r.watchedAt DESC
