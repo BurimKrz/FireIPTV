@@ -1,6 +1,8 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
 }
 
 android {
@@ -9,7 +11,14 @@ android {
 }
 
 dependencies {
-    implementation(platform(libs.compose.bom))
-    implementation(libs.compose.foundation)
-    implementation(libs.tv.material)
+    implementation(project(":core:ui"))
+    implementation(project(":core:data"))
+    implementation(project(":core:player"))
+
+    implementation(libs.media3.ui.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.hilt.android)
+    implementation(libs.hilt.lifecycle.viewmodel.compose)
+    ksp(libs.hilt.compiler)
 }

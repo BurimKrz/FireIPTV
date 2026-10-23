@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import com.fireiptv.core.ui.verticalDpadMovesFocus
 import androidx.compose.material3.Text as FieldText
 
 @Composable
@@ -58,7 +59,7 @@ fun AddPlaylistScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        val fieldModifier = Modifier.widthIn(max = 900.dp).fillMaxWidth()
+        val fieldModifier = Modifier.widthIn(max = 900.dp).fillMaxWidth().verticalDpadMovesFocus()
         OutlinedTextField(
             value = url,
             onValueChange = { url = it },

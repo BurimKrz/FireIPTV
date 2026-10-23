@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
+import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.channel.ChannelRepository
 import com.fireiptv.core.data.db.ChannelListItem
 import com.fireiptv.core.data.db.PlaylistSummary
@@ -23,23 +24,27 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** A row of the groups column; a null [id] is "All channels". */
+/** A row of the groups column: all channels, favourites, recents or one group. */
 @Immutable
-data class GroupRow(val id: Long?, val title: String, val channelCount: Int)
+data class GroupRow(val list: ChannelList, val title: String, val channelCount: Int)
 
 @Immutable
-data class ChannelRow(val id: Long, val number: Int, val name: String)
+data class ChannelRow(val id: Long, val number: Int, val name: String, val favorite: Boolean)
+
+/** Where focus goes when coming back from the player: [index] in the current channel list. */
+data class ReturnTarget(val channelId: Long, val index: Int)
 
 data class BrowseUiState(
     val loading: Boolean = true,
     val playlist: PlaylistSummary? = null,
     val groups: List<GroupRow> = emptyList(),
-    val selectedGroupId: Long? = null,
+    val selectedList: ChannelList = ChannelList.All,
     val importState: ImportState = ImportState.Idle,
 ) {
-    val selectedGroup: GroupRow? get() = groups.firstOrNull { it.id == selectedGroupId }
+    val selectedGroup: GroupRow? get() = groups.firstOrNull { it.list == selectedList }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -54,39 +59,61 @@ class BrowseViewModel @Inject constructor(
 
     // Counts in the summary change on every import batch; the lists below only restart on a new id.
     private val playlistId = playlist.map { it?.id }.distinctUntilChanged()
-    private val selectedGroupId = MutableStateFlow<Long?>(null)
+    private val selectedList = MutableStateFlow<ChannelList>(ChannelList.All)
 
     private val groups: Flow<List<GroupRow>> = playlistId.flatMapLatest { id ->
-        if (id == null) flowOf(emptyList()) else channelRepository.groups(id)
-    }.map { summaries -> summaries.map { GroupRow(it.id, it.title, it.channelCount) } }
+        if (id == null) {
+            flowOf(emptyList())
+        } else {
+            combine(channelRepository.favoriteCount(id), channelRepository.recentCount(id), channelRepository.groups(id)) { favorites, recents, groups ->
+                listOf(
+                    GroupRow(ChannelList.Favorites, "Favourites", favorites),
+                    GroupRow(ChannelList.Recents, "Recently watched", recents),
+                ) + groups.map { GroupRow(ChannelList.Group(it.id), it.title, it.channelCount) }
+            }
+        }
+    }
 
-    val channels: Flow<PagingData<ChannelRow>> = combine(playlistId, selectedGroupId, ::Pair)
-        .flatMapLatest { (playlistId, groupId) ->
+    val channels: Flow<PagingData<ChannelRow>> = combine(playlistId, selectedList, ::Pair)
+        .flatMapLatest { (playlistId, list) ->
             if (playlistId == null) {
                 flowOf(PagingData.empty())
             } else {
-                channelRepository.channels(playlistId, groupId).map { page -> page.map { it.toRow() } }
+                channelRepository.channels(playlistId, list).map { page -> page.map { it.toRow() } }
             }
         }
         .cachedIn(viewModelScope)
 
     val uiState: StateFlow<BrowseUiState> =
-        combine(playlist, groups, selectedGroupId, playlistRepository.importState) { playlist, groups, selected, import ->
-            val all = playlist?.let { GroupRow(id = null, title = "All channels", channelCount = it.channelCount) }
+        combine(playlist, groups, selectedList, playlistRepository.importState) { playlist, groups, selected, import ->
+            val all = playlist?.let { GroupRow(ChannelList.All, "All channels", it.channelCount) }
             BrowseUiState(
                 loading = false,
                 playlist = playlist,
                 groups = listOfNotNull(all) + groups,
-                selectedGroupId = selected,
+                selectedList = selected,
                 importState = import,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BrowseUiState())
 
-    fun selectGroup(groupId: Long?) {
-        selectedGroupId.value = groupId
+    /** The channel last played, if the player opened one since the last call. */
+    suspend fun takeReturnTarget(): ReturnTarget? {
+        val id = channelRepository.takeLastPlayed() ?: return null
+        val channel = channelRepository.channel(id) ?: return null
+        val index = channelRepository.position(channel, selectedList.value) ?: return null
+        return ReturnTarget(id, index)
+    }
+
+    fun select(list: ChannelList) {
+        selectedList.value = list
+    }
+
+    fun toggleFavorite(channelId: Long) {
+        viewModelScope.launch { channelRepository.toggleFavorite(channelId) }
     }
 
     // Channels without a tvg-chno are numbered by their place in the playlist, which stays the
     // same in every group.
-    private fun ChannelListItem.toRow() = ChannelRow(id = id, number = number ?: (sortOrder + 1), name = name)
+    private fun ChannelListItem.toRow() =
+        ChannelRow(id = id, number = number ?: (sortOrder + 1), name = name, favorite = favorite)
 }

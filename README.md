@@ -4,14 +4,19 @@ A live-TV player for Amazon Fire TV (Fire OS, Android-based). It plays your own 
 
 Built for personal use on a Fire TV Stick 4K (2nd gen, Fire OS 8.1) and installed by sideloading, not through the Appstore.
 
+The build plan, phases and what's done so far: [docs/PLAN.md](docs/PLAN.md).
+
 ## Status
 
 | Works now | Not yet |
 | --- | --- |
-| Add a playlist by URL (M3U or Xtream `get.php` link) | Playing a channel (next step) |
-| Xtream import of live channels only (~0.7 MB per refresh) | Favourites, recents, search |
-| Playlists screen: refresh, delete | Channel logos |
-| Home: groups + channel list, D-pad navigation | Parental PIN |
+| Add a playlist by URL (M3U or Xtream `get.php` link) | Channel logos |
+| Xtream import of live channels only (~0.7 MB per refresh) | Parental PIN |
+| Playlists screen: refresh, delete | |
+| Home: groups + channel list, D-pad navigation | |
+| Full-screen live TV (MPEG-TS and HLS), zapping with Up/Down | |
+| Favourites and recently watched, kept across refreshes | |
+| Search by channel name, on the TV (no network) | |
 
 ## Yes, you can install it as an APK
 
@@ -80,13 +85,39 @@ The app opens on the add screen with the URL filled in and the **Import** button
 
 | Remote | Does |
 | --- | --- |
-| Up / Down in the groups column | Moves through groups; resting on one for a moment shows its channels |
+**Home**
+
+| Remote | Does |
+| --- | --- |
+| Up / Down in the groups column | Moves through All channels, Favourites, Recently watched and the groups; resting on one for a moment shows its channels |
 | OK on a group | Jumps into its channel list |
+| OK on a channel | Plays it full screen |
+| Long-press OK, or Menu (☰), on a channel | Adds it to Favourites, or removes it (★ marks favourites) |
 | Left from the channel list | Back to the group you came from |
+| **Search** button (top right) | Search channel names as you type; case and accents don't matter ("kosove" finds "KOSOVË") |
 | **Playlists** button (top right) | Refresh or delete a playlist, add another |
 | Back on home | Leaves the app |
 
-Refresh only runs when you press it. Nothing updates in the background.
+**Search**
+
+| Remote | Does |
+| --- | --- |
+| Type on the on-screen keyboard | Results update as you type; each shows its group |
+| Back (closes the keyboard), then Down | Moves into the results |
+| OK on a result | Plays it; Up/Down then zaps through its group |
+| Long-press OK, or Menu (☰) | Adds it to Favourites, or removes it |
+
+**Watching**
+
+| Remote | Does |
+| --- | --- |
+| Down / Up (or CH+ / CH-) | Next / previous channel in the list you opened it from (a channel opened from Recently watched zaps through its group); the banner moves at once, the stream switches when you stop pressing |
+| OK | Shows or hides the channel banner; on an error, tries again |
+| Menu (☰) | Adds the channel to Favourites, or removes it |
+| Play/Pause | Stops the stream (no data used) / starts it again |
+| Back | Returns to the list, on the channel you were watching |
+
+Refresh only runs when you press it. Nothing updates in the background, and the stream closes as soon as you leave the player or press Home.
 
 ## Run on the emulator (development)
 
@@ -113,8 +144,8 @@ A public test playlist (about 11,000 channels): `https://iptv-org.github.io/iptv
 | `:app` | Activity, navigation, Hilt setup, Fire TV manifest |
 | `:feature:browse` | Home: groups and channel list |
 | `:feature:settings` | Add-playlist and playlists screens |
-| `:feature:player` | Full-screen player (in progress) |
+| `:feature:player` | Full-screen player, zapping, channel banner |
 | `:core:data` | Room database, playlist import (M3U + Xtream), repositories |
 | `:core:parser` | Streaming M3U parser |
-| `:core:player` | ExoPlayer setup (in progress) |
+| `:core:player` | `PlayerManager`: ExoPlayer, stream type picking, retries, zap timing |
 | `:core:ui` | TV theme |

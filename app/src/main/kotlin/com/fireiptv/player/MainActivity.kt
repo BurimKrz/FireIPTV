@@ -9,13 +9,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 import androidx.tv.material3.Surface
+import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.playlist.PlaylistRepository
 import com.fireiptv.core.ui.FireTheme
 import com.fireiptv.feature.browse.BrowseScreen
+import com.fireiptv.feature.browse.search.SearchScreen
+import com.fireiptv.feature.player.PlayerScreen
+import com.fireiptv.feature.player.PlayerViewModel
 import com.fireiptv.feature.settings.playlists.AddPlaylistScreen
 import com.fireiptv.feature.settings.playlists.PlaylistsScreen
 import dagger.hilt.android.AndroidEntryPoint
@@ -52,6 +58,10 @@ private object Routes {
     const val BROWSE = "browse"
     const val PLAYLISTS = "playlists"
     const val ADD_PLAYLIST = "playlists/add"
+    const val SEARCH = "search"
+    const val PLAYER = "player/{${PlayerViewModel.ARG_CHANNEL_ID}}?list={${PlayerViewModel.ARG_LIST}}"
+
+    fun player(channelId: Long, list: ChannelList) = "player/$channelId?list=${list.encode()}"
 }
 
 @Composable
@@ -68,9 +78,25 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
         composable(Routes.BROWSE) {
             BrowseScreen(
                 onOpenPlaylists = { navController.navigate(Routes.PLAYLISTS) },
+                onOpenSearch = { navController.navigate(Routes.SEARCH) },
                 onAddPlaylist = { navController.navigate(Routes.ADD_PLAYLIST) },
-                onPlayChannel = { /* The player arrives in phase 1, steps 5 and 6. */ },
+                onPlayChannel = { channelId, list -> navController.navigate(Routes.player(channelId, list)) },
             )
+        }
+        composable(
+            Routes.PLAYER,
+            arguments = listOf(
+                navArgument(PlayerViewModel.ARG_CHANNEL_ID) { type = NavType.LongType },
+                navArgument(PlayerViewModel.ARG_LIST) {
+                    type = NavType.StringType
+                    defaultValue = ChannelList.All.encode()
+                },
+            ),
+        ) {
+            PlayerScreen()
+        }
+        composable(Routes.SEARCH) {
+            SearchScreen(onPlayChannel = { channelId, list -> navController.navigate(Routes.player(channelId, list)) })
         }
         composable(Routes.PLAYLISTS) {
             PlaylistsScreen(onAddPlaylist = { navController.navigate(Routes.ADD_PLAYLIST) })

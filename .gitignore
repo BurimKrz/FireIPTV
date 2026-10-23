@@ -10,4 +10,6 @@ build/
 .cxx
 *.apk
 *.aab
-docs/
+# docs/ holds the playlist login; only the plan is tracked.
+docs/*
+!docs/PLAN.md

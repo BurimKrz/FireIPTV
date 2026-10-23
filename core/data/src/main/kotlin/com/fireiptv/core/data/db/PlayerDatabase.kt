@@ -8,15 +8,28 @@ import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [PlaylistEntity::class, GroupEntity::class, ChannelEntity::class, ChannelFts::class],
-    version = 2,
+    entities = [
+        PlaylistEntity::class,
+        GroupEntity::class,
+        ChannelEntity::class,
+        ChannelFts::class,
+        FavoriteEntity::class,
+        RecentEntity::class,
+    ],
+    version = 4,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2)],
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2),
+        AutoMigration(from = 2, to = 3),
+        // v4 changed the search tokenizer; Room recreates the index and refills it from the channels.
+        AutoMigration(from = 3, to = 4),
+    ],
 )
 abstract class PlayerDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
     abstract fun groupDao(): GroupDao
     abstract fun channelDao(): ChannelDao
+    abstract fun libraryDao(): LibraryDao
 
     companion object {
         fun build(context: Context, inMemory: Boolean = false): PlayerDatabase {

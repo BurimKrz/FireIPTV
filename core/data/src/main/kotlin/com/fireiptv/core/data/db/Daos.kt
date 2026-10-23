@@ -23,7 +23,18 @@ data class PlaylistSummary(
 data class GroupSummary(val id: Long, val title: String, val channelCount: Int)
 
 /** The columns the channel list shows, so paging doesn't load stream URLs and catch-up fields. */
-data class ChannelListItem(val id: Long, val name: String, val number: Int?, val sortOrder: Int)
+data class ChannelListItem(val id: Long, val name: String, val number: Int?, val sortOrder: Int, val favorite: Boolean)
+
+/** A search result: a channel with its group, so results from many groups can be told apart. */
+data class ChannelSearchItem(
+    val id: Long,
+    val name: String,
+    val number: Int?,
+    val sortOrder: Int,
+    val groupId: Long?,
+    val groupTitle: String?,
+    val favorite: Boolean,
+)
 
 @Dao
 interface PlaylistDao {
@@ -100,6 +111,9 @@ interface GroupDao {
         """,
     )
     fun observeSummaries(playlistId: Long): Flow<List<GroupSummary>>
+
+    @Query("SELECT title FROM channel_group WHERE id = :id")
+    suspend fun title(id: Long): String?
 }
 
 @Dao
@@ -114,29 +128,93 @@ interface ChannelDao {
     @Query("SELECT * FROM channel WHERE groupId = :groupId ORDER BY sortOrder")
     fun pageByGroup(groupId: Long): PagingSource<Int, ChannelEntity>
 
-    @Query("SELECT id, name, number, sortOrder FROM channel WHERE playlistId = :playlistId ORDER BY sortOrder")
+    @Query(
+        """
+        SELECT id, name, number, sortOrder, $IS_FAVORITE FROM channel c
+        WHERE playlistId = :playlistId
+        ORDER BY sortOrder
+        """,
+    )
     fun pageListByPlaylist(playlistId: Long): PagingSource<Int, ChannelListItem>
 
     // playlistId keeps the query on the (playlistId, groupId, sortOrder) index, so it needs no sort.
     @Query(
         """
-        SELECT id, name, number, sortOrder FROM channel
+        SELECT id, name, number, sortOrder, $IS_FAVORITE FROM channel c
         WHERE playlistId = :playlistId AND groupId = :groupId
         ORDER BY sortOrder
         """,
     )
     fun pageListByGroup(playlistId: Long, groupId: Long): PagingSource<Int, ChannelListItem>
 
+    /** Channels of one playlist whose name matches the FTS [query], in playlist order. */
     @Query(
         """
-        SELECT channel.* FROM channel
-        JOIN channel_fts ON channel.rowid = channel_fts.rowid
-        WHERE channel_fts MATCH :query
-        ORDER BY channel.sortOrder
+        SELECT c.id, c.name, c.number, c.sortOrder, c.groupId, g.title AS groupTitle, $IS_FAVORITE
+        FROM channel_fts
+        JOIN channel c ON c.id = channel_fts.rowid
+        LEFT JOIN channel_group g ON g.id = c.groupId
+        WHERE channel_fts MATCH :query AND c.playlistId = :playlistId
+        ORDER BY c.sortOrder
+        LIMIT :limit
         """,
     )
-    fun search(query: String): PagingSource<Int, ChannelEntity>
+    fun search(playlistId: Long, query: String, limit: Int): Flow<List<ChannelSearchItem>>
 
     @Query("SELECT COUNT(*) FROM channel WHERE playlistId = :playlistId")
     suspend fun count(playlistId: Long): Int
+
+    @Query("SELECT * FROM channel WHERE id = :id")
+    suspend fun get(id: Long): ChannelEntity?
+
+    // Zapping and list positions. A null groupId means the whole playlist; both use sortOrder,
+    // the same order the browse lists show.
+
+    @Query(
+        """
+        SELECT * FROM channel
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND sortOrder > :sortOrder
+        ORDER BY sortOrder LIMIT 1
+        """,
+    )
+    suspend fun after(playlistId: Long, groupId: Long?, sortOrder: Int): ChannelEntity?
+
+    @Query(
+        """
+        SELECT * FROM channel
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND sortOrder < :sortOrder
+        ORDER BY sortOrder DESC LIMIT 1
+        """,
+    )
+    suspend fun before(playlistId: Long, groupId: Long?, sortOrder: Int): ChannelEntity?
+
+    @Query(
+        """
+        SELECT * FROM channel
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId)
+        ORDER BY sortOrder LIMIT 1
+        """,
+    )
+    suspend fun first(playlistId: Long, groupId: Long?): ChannelEntity?
+
+    @Query(
+        """
+        SELECT * FROM channel
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId)
+        ORDER BY sortOrder DESC LIMIT 1
+        """,
+    )
+    suspend fun last(playlistId: Long, groupId: Long?): ChannelEntity?
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM channel
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND sortOrder < :sortOrder
+        """,
+    )
+    suspend fun position(playlistId: Long, groupId: Long?, sortOrder: Int): Int
 }
+
+/** Whether channel `c` is a favourite: one primary-key probe per row. */
+internal const val IS_FAVORITE =
+    "EXISTS(SELECT 1 FROM favorite f WHERE f.playlistId = c.playlistId AND f.streamUrl = c.streamUrl) AS favorite"
