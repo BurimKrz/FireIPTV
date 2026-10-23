@@ -5,6 +5,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
+import com.fireiptv.core.data.account.AccountRepository
+import com.fireiptv.core.data.account.AccountResult
 import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.channel.ChannelRepository
 import com.fireiptv.core.data.db.ChannelEntity
@@ -24,6 +26,9 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.text.DateFormat
+import java.util.Date
+import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 
 /** The channel in the banner: the one playing, or the one a zap is heading to. */
@@ -43,6 +48,8 @@ data class PlayerUiState(
     val lastZapMs: Long? = null,
     /** Set when the channel to open no longer exists (deleted by a refresh). */
     val missing: Boolean = false,
+    /** Why the provider refused the stream, from the account status, when that explains it. */
+    val accountNote: String? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -51,6 +58,7 @@ class PlayerViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val channels: ChannelRepository,
     private val playerManager: PlayerManager,
+    private val accounts: AccountRepository,
 ) : ViewModel() {
 
     private val startChannelId: Long = checkNotNull(savedStateHandle[ARG_CHANNEL_ID])
@@ -70,15 +78,16 @@ class PlayerViewModel @Inject constructor(
     }
     private val bannerVisible = MutableStateFlow(true)
     private val missing = MutableStateFlow(false)
+    private val accountNote = MutableStateFlow<String?>(null)
 
     val uiState: StateFlow<PlayerUiState> = combine(
         combine(banner, bannerFavorite) { channel, favorite -> channel?.copy(favorite = favorite) },
         bannerVisible,
-        playerManager.status,
+        combine(playerManager.status, accountNote, ::Pair),
         playerManager.lastZapMs,
         missing,
-    ) { channel, visible, status, zapMs, missing ->
-        PlayerUiState(channel, visible, status, zapMs, missing)
+    ) { channel, visible, (status, note), zapMs, missing ->
+        PlayerUiState(channel, visible, status, zapMs, missing, note)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PlayerUiState())
 
     private var target: ChannelEntity? = null
@@ -134,6 +143,12 @@ class PlayerViewModel @Inject constructor(
                 if (status is PlaybackStatus.Playing && channel != null && channel.id != recordedId) {
                     recordedId = channel.id
                     channels.recordWatched(channel)
+                }
+                if (status is PlaybackStatus.Failed && status.httpCode in REFUSAL_CODES) {
+                    // One small account request, only now, to say why instead of showing a bare HTTP code.
+                    launch { accountNote.value = explainRefusal() }
+                } else if (status !is PlaybackStatus.Failed) {
+                    accountNote.value = null
                 }
             }
         }
@@ -220,6 +235,23 @@ class PlayerViewModel @Inject constructor(
         )
     }
 
+    private suspend fun explainRefusal(): String? {
+        val info = (accounts.load() as? AccountResult.Loaded)?.info ?: return null
+        val active = info.activeConnections
+        val max = info.maxConnections
+        return when {
+            info.status != null && !info.status.equals("Active", ignoreCase = true) ->
+                "Your provider reports the account as ${info.status}."
+            info.expiresAt != null && TimeUnit.SECONDS.toMillis(info.expiresAt!!) < System.currentTimeMillis() ->
+                "Your account expired on ${DateFormat.getDateInstance(DateFormat.LONG).format(Date(TimeUnit.SECONDS.toMillis(info.expiresAt!!)))}."
+            // Panels can keep counting a stream for a while after it closed, so don't claim another device.
+            active != null && max != null && active >= max ->
+                "Your provider reports $active of $max connections in use, so it won't open another. " +
+                    "Stop playback on any other device; if nothing else is playing, wait a minute, then press OK."
+            else -> "Your account is active and free, so the provider is refusing this channel itself."
+        }
+    }
+
     override fun onCleared() {
         playerManager.release()
     }
@@ -229,5 +261,8 @@ class PlayerViewModel @Inject constructor(
         const val ARG_LIST = "list"
         private const val ZAP_DEBOUNCE_MS = 250L
         private const val BANNER_MS = 4_000L
+
+        /** Refusals that can come from the account: login, expiry, or too many connections. */
+        private val REFUSAL_CODES = setOf(401, 403, 429, 456, 458, 509, 512, 513)
     }
 }

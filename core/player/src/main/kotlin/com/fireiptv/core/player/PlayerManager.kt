@@ -1,6 +1,9 @@
 package com.fireiptv.core.player
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
@@ -60,7 +63,12 @@ sealed interface PlaybackStatus {
     data object Idle : PlaybackStatus
     data object Loading : PlaybackStatus
     data object Playing : PlaybackStatus
-    data class Failed(val message: String) : PlaybackStatus
+
+    /** The device is offline; the channel restarts by itself when a network is back. */
+    data object WaitingForNetwork : PlaybackStatus
+
+    /** [httpCode] is set when the provider refused the stream, so callers can explain why. */
+    data class Failed(val message: String, val httpCode: Int? = null) : PlaybackStatus
 }
 
 /**
@@ -90,6 +98,19 @@ class PlayerManager @Inject constructor(
         .build()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val connectivity = context.getSystemService(ConnectivityManager::class.java)
+
+    // Called on a binder thread: hop to main, where the player lives.
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            scope.launch {
+                if (_status.value == PlaybackStatus.WaitingForNetwork) {
+                    Log.i(TAG, "network back, reopening ${current?.label}")
+                    resume()
+                }
+            }
+        }
+    }
     private val _status = MutableStateFlow<PlaybackStatus>(PlaybackStatus.Idle)
     val status: StateFlow<PlaybackStatus> = _status.asStateFlow()
 
@@ -110,6 +131,7 @@ class PlayerManager @Inject constructor(
     )
 
     init {
+        connectivity?.registerDefaultNetworkCallback(networkCallback)
         player.addListener(
             object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) {
@@ -165,6 +187,7 @@ class PlayerManager @Inject constructor(
     }
 
     fun release() {
+        runCatching { connectivity?.unregisterNetworkCallback(networkCallback) }
         scope.cancel()
         player.release()
     }
@@ -222,6 +245,14 @@ class PlayerManager @Inject constructor(
                 open()
                 return
             }
+            // Offline: retrying now can't work. Wait for the network callback instead of failing.
+            error.isNetworkError() && !isOnline() -> {
+                retryJob?.cancel()
+                zapStartedAt = 0L
+                player.stop()
+                _status.value = PlaybackStatus.WaitingForNetwork
+                return
+            }
             error.isRetryable() && retries < RETRY_DELAYS_MS.size -> {
                 val wait = RETRY_DELAYS_MS[retries++]
                 _status.value = PlaybackStatus.Loading
@@ -233,7 +264,21 @@ class PlayerManager @Inject constructor(
             }
         }
         zapStartedAt = 0L
-        _status.value = PlaybackStatus.Failed(error.toMessage())
+        _status.value = PlaybackStatus.Failed(error.toMessage(), httpCode)
+    }
+
+    private fun PlaybackException.isNetworkError(): Boolean = when (errorCode) {
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
+        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
+        PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+        -> true
+        else -> false
+    }
+
+    private fun isOnline(): Boolean {
+        val manager = connectivity ?: return true
+        val capabilities = manager.getNetworkCapabilities(manager.activeNetwork) ?: return false
+        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
     private fun PlaybackException.isRetryable(): Boolean = when (errorCode) {
@@ -273,7 +318,7 @@ class PlayerManager @Inject constructor(
 
     private companion object {
         const val TAG = "FirePlayer"
-        val RETRY_DELAYS_MS = longArrayOf(1_000, 3_000)
+        val RETRY_DELAYS_MS = longArrayOf(1_000, 3_000, 6_000)
         const val STALL_TIMEOUT_MS = 8_000L
         val CONTAINER_ERRORS = setOf(
             PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,

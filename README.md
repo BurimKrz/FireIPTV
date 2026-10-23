@@ -120,6 +120,8 @@ The app opens on the add screen with the URL filled in and the **Import** button
 | Play/Pause | Stops the stream (no data used) / starts it again |
 | Back | Returns to the list, on the channel you were watching |
 
+If the internet drops, the player shows "No internet connection" and starts the channel again by itself when it's back. If the provider refuses a channel, the message says why (account expired, or all connections in use).
+
 Refresh only runs when you press it. Nothing updates in the background, and the stream closes as soon as you leave the player or press Home. Each channel logo downloads once (about 25 KB) and is kept in a 50 MB cache; logos for rows you scroll past are not fetched, and turning logos off in Settings stops all logo downloads.
 
 ## Run on the emulator (development)

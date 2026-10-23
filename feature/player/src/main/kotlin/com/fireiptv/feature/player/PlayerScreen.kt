@@ -103,8 +103,15 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
                 body = if (state.missing) {
                     "It was removed by a playlist refresh. Press Back to choose another."
                 } else {
-                    "${(status as PlaybackStatus.Failed).message}\nOK to try again, Up/Down for another channel."
+                    "${state.accountNote ?: (status as PlaybackStatus.Failed).message}\nOK to try again, Up/Down for another channel."
                 },
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
+        if (status is PlaybackStatus.WaitingForNetwork) {
+            Message(
+                title = "No internet connection",
+                body = "The channel starts again by itself when the connection is back.",
                 modifier = Modifier.align(Alignment.Center),
             )
         }

@@ -159,7 +159,7 @@ class XtreamImportTest {
         streams = """[
             {"name":"Account Information","stream_type":"live","stream_id":1,"category_id":"1"},
             {"name":"ACCOUNT INFO","stream_type":"live","stream_id":2,"category_id":"3"},
-            {"name":"News One","stream_type":"live","stream_id":101,"category_id":"3"}
+            {"num":3,"name":"News One","stream_type":"live","stream_id":101,"category_id":"3"}
         ]"""
         val id = addPlaylist()
 
@@ -167,6 +167,8 @@ class XtreamImportTest {
 
         assertEquals(ImportOutcome.Imported(channels = 1, groups = 1, skippedLines = 0), outcome)
         assertEquals(listOf("News"), db.groupDao().observeGroups(id).first().map { it.title })
+        // The provider's number is kept, so leaving channels out doesn't renumber the rest.
+        assertEquals(3, db.channelDao().first(id, null)!!.number)
     }
 
     @Test
@@ -189,5 +191,7 @@ class XtreamImportTest {
         assertEquals(1, result.info.maxConnections)
         assertEquals(false, result.info.isTrial)
         assertEquals(1_729_641_600L, result.info.createdAt)
+        // Saved, so home can warn about expiry without asking again.
+        assertEquals(1_814_918_400L, db.playlistDao().first()!!.accountExpiresAt)
     }
 }

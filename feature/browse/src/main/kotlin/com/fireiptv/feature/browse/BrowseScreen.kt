@@ -53,6 +53,8 @@ import com.fireiptv.core.data.playlist.ImportState
 import com.fireiptv.core.ui.ChannelLogo
 import com.fireiptv.core.ui.rememberScrollIdle
 import kotlinx.coroutines.delay
+import java.util.concurrent.TimeUnit
+import kotlin.math.ceil
 
 @Composable
 fun BrowseScreen(
@@ -103,6 +105,16 @@ fun BrowseScreen(
 private fun Header(state: BrowseUiState, onOpenSettings: () -> Unit, onOpenSearch: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(state.playlist?.name ?: "FireIPTV", style = MaterialTheme.typography.headlineSmall, maxLines = 1)
+        // From the expiry saved at the last refresh: no request just to show this.
+        state.playlist?.accountExpiresAt?.let { expiresAt ->
+            val days = ceil((TimeUnit.SECONDS.toMillis(expiresAt) - System.currentTimeMillis()) / DAY_MS).toLong()
+            val warning = when {
+                days < 0 -> "Account expired"
+                days <= EXPIRY_WARNING_DAYS -> if (days == 1L) "Account expires in 1 day" else "Account expires in $days days"
+                else -> null
+            }
+            warning?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error) }
+        }
         when (val import = state.importState) {
             is ImportState.Running -> Text(
                 "Updating… ${"%,d".format(import.progress?.channels ?: 0)} channels",
@@ -305,4 +317,6 @@ private fun ChannelItem(
 }
 
 private const val RETURN_FOCUS_FRAMES = 60
+private const val EXPIRY_WARNING_DAYS = 7
+private val DAY_MS = TimeUnit.DAYS.toMillis(1).toDouble()
 private const val GROUP_SETTLE_MS = 250L

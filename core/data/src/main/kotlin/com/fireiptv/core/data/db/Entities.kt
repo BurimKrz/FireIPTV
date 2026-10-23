@@ -21,6 +21,8 @@ data class PlaylistEntity(
     val lastModified: String? = null,
     /** A refresh imports into a hidden staging row, then swaps it in (see [PlaylistDao.swapStaging]). */
     val isStaging: Boolean = false,
+    /** Xtream account expiry (epoch seconds) as of the last refresh or Account screen visit. */
+    val accountExpiresAt: Long? = null,
 )
 
 @Entity(

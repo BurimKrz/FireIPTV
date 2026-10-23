@@ -61,6 +61,7 @@ class AccountRepository @Inject constructor(
                 if (!response.isSuccessful) return@withContext AccountResult.Failed("The provider answered HTTP ${response.code}")
                 val user = JsonReader(response.body.charStream()).use { XtreamJson.readUserInfo(it) }
                 if (!user.authenticated) return@withContext AccountResult.Failed("The provider rejected the username or password")
+                playlistDao.setAccountExpiry(playlist.id, user.expiresAt)
                 AccountResult.Loaded(
                     AccountInfo(
                         username = user.username,

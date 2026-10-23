@@ -20,6 +20,8 @@ internal data class XtreamCategory(val id: String, val name: String)
 
 internal data class XtreamLiveStream(
     val streamId: String,
+    /** The provider's channel number, the same in every app; stays put when we leave channels out. */
+    val number: Int?,
     val name: String,
     val icon: String?,
     val epgChannelId: String?,
@@ -110,6 +112,7 @@ internal object XtreamJson {
         reader.beginArray()
         while (reader.hasNext()) {
             var streamId: String? = null
+            var number: String? = null
             var name: String? = null
             var icon: String? = null
             var epg: String? = null
@@ -118,6 +121,7 @@ internal object XtreamJson {
             reader.readObject { key ->
                 when (key) {
                     "stream_id" -> streamId = reader.nextScalar()
+                    "num" -> number = reader.nextScalar()
                     "name" -> name = reader.nextScalar()
                     "stream_icon" -> icon = reader.nextScalar()
                     "epg_channel_id" -> epg = reader.nextScalar()
@@ -127,7 +131,7 @@ internal object XtreamJson {
                 }
             }
             val id = streamId ?: continue
-            onStream(XtreamLiveStream(id, name?.trim().orEmpty(), icon, epg, category, type))
+            onStream(XtreamLiveStream(id, number?.toIntOrNull()?.takeIf { it > 0 }, name?.trim().orEmpty(), icon, epg, category, type))
         }
         reader.endArray()
     }

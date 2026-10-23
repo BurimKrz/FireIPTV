@@ -157,8 +157,8 @@ Phase 0 is mostly done today; the task lists below track what remains in each ph
 
 **Phase 3: Hardening (weeks 8–10)**
 
-1. Error recovery: behind-live-window re-prepare, 3× backoff retry, reconnect after Wi-Fi drops, decoder fallback, clear error screens.
-2. Account status: expired or over its connection limit, shown before playback fails.
+1. Error recovery: behind-live-window re-prepare, 3× backoff retry, reconnect after Wi-Fi drops, decoder fallback, clear error screens. Done on 2026-10-23: errors retry three times (1, 3, 6 s). When the device is offline the player stops retrying and shows "No internet connection", then reopens the channel by itself when Android reports a network again: tested by cutting the emulator's network mid-zap, the channel was back 0.7 s after the network. Behind-live-window, decoder fallback and plain-language errors were already in from phase 1.
+2. Account status: expired or over its connection limit, shown before playback fails. Done on 2026-10-23: when the provider refuses a stream (401, 403, 429, 456, 458, 509, 512, 513), the player asks the account status once (about 1 KB) and says why: not active, expired on a date, or N of N connections in use. It doesn't claim "another device", because panels keep counting a closed stream for a while. Home warns when the account expires within 7 days, from the expiry saved at each refresh (no extra request). Also: channel numbers now come from the provider (Xtream "num"), so leaving out or hiding channels never renumbers the rest.
 3. Parental PIN.
 4. Data-use check: measure MB per hour of viewing and per refresh, and confirm nothing downloads while idle.
 5. Optional: libVLC fallback only if real streams need it.
@@ -225,4 +225,4 @@ The biggest risks are platform policy and shrinking reach, not code.
 - [ ] Repo hosting: done, private repo BurimKrz/FireIPTV. For in-app updates the app must read releases without a login. Recommended: a small public repo that holds only the release APKs, filled by the workflow; the code stays private. The alternatives are making this repo public, or putting a GitHub token in the app, which anyone with the APK could pull out.
 - [ ] Which legal test streams do we use for fixtures?
 
-**Next up:** Gate 2 (50k-channel import ≤ 20 s on the stick) and phase 3 hardening. Gate 1 (zap time on your Fire TV Stick) waits for the stick and this PC to be on the same network: the stick is on 192.168.10.x, the PC on 192.168.0.x.
+**Next up:** phase 3 step 3, parental PIN. Gate 1 (zap time on your Fire TV Stick) waits for the stick and this PC to be on the same network: the stick is on 192.168.10.x, the PC on 192.168.0.x.

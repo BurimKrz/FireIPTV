@@ -15,6 +15,7 @@ data class PlaylistSummary(
     val url: String,
     val epgUrl: String?,
     val lastSync: Long?,
+    val accountExpiresAt: Long?,
     val channelCount: Int,
     val groupCount: Int,
 )
@@ -61,7 +62,7 @@ interface PlaylistDao {
 
     @Query(
         """
-        SELECT p.id, p.name, p.url, p.epgUrl, p.lastSync,
+        SELECT p.id, p.name, p.url, p.epgUrl, p.lastSync, p.accountExpiresAt,
             (SELECT COUNT(*) FROM channel c WHERE c.playlistId = p.id) AS channelCount,
             (SELECT COUNT(*) FROM channel_group g WHERE g.playlistId = p.id) AS groupCount
         FROM playlist p
@@ -76,6 +77,9 @@ interface PlaylistDao {
 
     @Query("SELECT * FROM playlist WHERE isStaging = 0 ORDER BY id LIMIT 1")
     suspend fun first(): PlaylistEntity?
+
+    @Query("UPDATE playlist SET accountExpiresAt = :expiresAt WHERE id = :id")
+    suspend fun setAccountExpiry(id: Long, expiresAt: Long?)
 
     @Query("DELETE FROM playlist WHERE id = :id")
     suspend fun delete(id: Long)

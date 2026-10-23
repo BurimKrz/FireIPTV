@@ -152,6 +152,7 @@ class PlaylistImporter @Inject constructor(
                     val entry = M3uEntry(
                         name = stream.name.ifEmpty { "Channel ${stream.streamId}" },
                         url = account.liveStreamUrl(stream.streamId, extension),
+                        tvgChno = stream.number,
                         tvgId = stream.epgChannelId,
                         tvgLogo = stream.icon,
                         groupTitle = stream.categoryId?.let { categoryNames[it] },
@@ -161,7 +162,7 @@ class PlaylistImporter @Inject constructor(
                 }
             }
         }
-        finish(playlist, inPlace, written) { copy(etag = null, lastModified = null) }
+        finish(playlist, inPlace, written) { copy(etag = null, lastModified = null, accountExpiresAt = user.expiresAt) }
         return ImportOutcome.Imported(written.channels, written.groups, skippedLines = 0)
     }
 
