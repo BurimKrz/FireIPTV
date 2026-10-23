@@ -1,0 +1,78 @@
+package com.fireiptv.core.data.db
+
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.Fts4
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
+
+@Entity(tableName = "playlist")
+data class PlaylistEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val url: String,
+    val epgUrl: String? = null,
+    val userAgent: String? = null,
+    /** Epoch millis of the last successful sync, or null before the first one. */
+    val lastSync: Long? = null,
+    val etag: String? = null,
+    val lastModified: String? = null,
+    /** A refresh imports into a hidden staging row, then swaps it in (see [PlaylistDao.swapStaging]). */
+    val isStaging: Boolean = false,
+)
+
+@Entity(
+    tableName = "channel_group",
+    foreignKeys = [
+        ForeignKey(PlaylistEntity::class, ["id"], ["playlistId"], onDelete = ForeignKey.CASCADE),
+    ],
+    indices = [Index("playlistId", "sortOrder")],
+)
+data class GroupEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val playlistId: Long,
+    val title: String,
+    val sortOrder: Int,
+    val hidden: Boolean = false,
+)
+
+@Entity(
+    tableName = "channel",
+    foreignKeys = [
+        ForeignKey(PlaylistEntity::class, ["id"], ["playlistId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(GroupEntity::class, ["id"], ["groupId"], onDelete = ForeignKey.SET_NULL),
+    ],
+    indices = [
+        Index("playlistId", "groupId", "sortOrder"),
+        // The all-channels list pages 28k+ rows in playlist order; without this every page sorts them all.
+        Index("playlistId", "sortOrder"),
+        Index("groupId"),
+        Index("tvgId"),
+    ],
+)
+data class ChannelEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val playlistId: Long,
+    val groupId: Long?,
+    val name: String,
+    val number: Int?,
+    val streamUrl: String,
+    val logoUrl: String?,
+    val tvgId: String?,
+    val tvgName: String?,
+    val catchupType: String?,
+    val catchupSource: String?,
+    val catchupDays: Int?,
+    /** EPG shift in hours. */
+    val tvgShift: Float?,
+    val userAgent: String?,
+    val referrer: String?,
+    val sortOrder: Int,
+)
+
+@Fts4(contentEntity = ChannelEntity::class)
+@Entity(tableName = "channel_fts")
+data class ChannelFts(
+    @ColumnInfo(name = "name") val name: String,
+)
