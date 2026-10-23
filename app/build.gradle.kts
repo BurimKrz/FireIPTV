@@ -15,8 +15,24 @@ android {
         versionName = "0.1.0"
     }
 
+    // The release key lives outside the repo; its path and passwords come from ~/.gradle/gradle.properties
+    // here, and from ORG_GRADLE_PROJECT_* secrets on CI. Every release must use the same key, or it
+    // won't install over the copy on the TV.
+    val keystore = providers.gradleProperty("fireiptv.keystore").orNull
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = providers.gradleProperty("fireiptv.keystorePassword").get()
+                keyAlias = providers.gradleProperty("fireiptv.keyAlias").get()
+                keyPassword = providers.gradleProperty("fireiptv.keyPassword").get()
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

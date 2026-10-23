@@ -8,7 +8,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -29,8 +32,14 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val firstRow = remember { FocusRequester() }
-    LaunchedEffect(Unit) { firstRow.requestFocus() }
+    // Back from Playlists, Account or Groups lands on the row that opened it, not on the first row.
+    var lastRow by rememberSaveable { mutableIntStateOf(ROW_PLAYLISTS) }
+    val rows = remember { List(ROW_COUNT) { FocusRequester() } }
+    LaunchedEffect(Unit) { rows[lastRow].requestFocus() }
+    fun open(row: Int, action: () -> Unit) {
+        lastRow = row
+        action()
+    }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -48,15 +57,15 @@ fun SettingsScreen(
                 1 -> "1 playlist · ${"%,d".format(state.channelCount)} channels"
                 else -> "${state.playlistCount} playlists · ${"%,d".format(state.channelCount)} channels"
             },
-            onClick = onOpenPlaylists,
-            modifier = rowModifier.focusRequester(firstRow),
+            onClick = { open(ROW_PLAYLISTS, onOpenPlaylists) },
+            modifier = rowModifier.focusRequester(rows[ROW_PLAYLISTS]),
         )
         if (state.hasAccount) {
             SettingRow(
                 title = "Account",
                 detail = "Status, expiry date and connections, from your provider",
-                onClick = onOpenAccount,
-                modifier = rowModifier,
+                onClick = { open(ROW_ACCOUNT, onOpenAccount) },
+                modifier = rowModifier.focusRequester(rows[ROW_ACCOUNT]),
             )
         }
         SettingRow(
@@ -66,8 +75,8 @@ fun SettingsScreen(
             } else {
                 "${state.groupCount - state.hiddenGroupCount} of ${state.groupCount} groups shown"
             },
-            onClick = onOpenGroups,
-            modifier = rowModifier,
+            onClick = { open(ROW_GROUPS, onOpenGroups) },
+            modifier = rowModifier.focusRequester(rows[ROW_GROUPS]),
         )
         SettingRow(
             title = "Channel start: " + if (state.startMode == StartMode.FAST) "Fast" else "Stable",
@@ -76,8 +85,8 @@ fun SettingsScreen(
             } else {
                 "Channels start a second or two later, then pause less on weak Wi-Fi. OK to switch to Fast."
             },
-            onClick = viewModel::toggleStartMode,
-            modifier = rowModifier,
+            onClick = { open(ROW_START, viewModel::toggleStartMode) },
+            modifier = rowModifier.focusRequester(rows[ROW_START]),
         )
         SettingRow(
             title = "Channel logos: " + if (state.logosEnabled) "On" else "Off",
@@ -86,8 +95,8 @@ fun SettingsScreen(
             } else {
                 "No logos are shown or downloaded. OK to turn on."
             },
-            onClick = viewModel::toggleLogos,
-            modifier = rowModifier,
+            onClick = { open(ROW_LOGOS, viewModel::toggleLogos) },
+            modifier = rowModifier.focusRequester(rows[ROW_LOGOS]),
         )
         Text(
             "FireIPTV $appVersion",
@@ -108,3 +117,10 @@ private fun SettingRow(title: String, detail: String, onClick: () -> Unit, modif
         modifier = modifier,
     )
 }
+
+private const val ROW_PLAYLISTS = 0
+private const val ROW_ACCOUNT = 1
+private const val ROW_GROUPS = 2
+private const val ROW_START = 3
+private const val ROW_LOGOS = 4
+private const val ROW_COUNT = 5

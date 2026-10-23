@@ -23,18 +23,25 @@ The build plan, phases and what's done so far: [docs/PLAN.md](docs/PLAN.md).
 
 ## Yes, you can install it as an APK
 
-Every build produces an APK file you can put on the stick:
+Build the release APK, the one to put on the TV:
 
 ```bash
-./gradlew assembleDebug
-# → app/build/outputs/apk/debug/app-debug.apk  (~15 MB)
+./gradlew assembleRelease
+# → app/build/outputs/apk/release/app-release.apk  (~2.5 MB)
 ```
 
-APK files are not committed to this repo (`*.apk` is in `.gitignore`), so build one on your PC first.
+It is shrunk with R8 and signed with your own release key, so every later release installs over it and keeps your playlists, favourites and settings. APK files are not committed to this repo (`*.apk` is in `.gitignore`).
 
-This is a **debug** APK, which is fine for personal use. It is signed with this PC's debug key, so later updates install over it only when they're built on the same PC. A build from another machine needs an uninstall first, and that erases your playlists. A properly signed release APK with its own key comes in phase 4.
+**The release key.** It lives outside the repo:
 
-Debug builds also install a second "Leaks" icon (LeakCanary, a memory-leak detector). Release builds won't have it.
+| File | Holds |
+| --- | --- |
+| `~/.android/fireiptv-release.jks` | the key |
+| `~/.gradle/gradle.properties` | its path and password (`fireiptv.*` lines) |
+
+**Back up both somewhere safe** (a USB stick, a password manager). If the key is lost, a new build can't update the app on the TV: it would have to be uninstalled first, which erases your playlists and favourites. Without those lines, `assembleRelease` still builds, but unsigned.
+
+`./gradlew assembleDebug` builds a development version (~18 MB, debug-signed, with a "Leaks" memory checker icon). Debug and release builds have different keys, so switching a device from one to the other means uninstalling first.
 
 ## Build requirements
 
@@ -55,7 +62,7 @@ Gradle comes with the repo (`./gradlew`); nothing else to install.
 
    ```bash
    adb connect <stick-ip>:5555        # accept the prompt on the TV the first time
-   adb install -r app/build/outputs/apk/debug/app-debug.apk
+   adb install -r app/build/outputs/apk/release/app-release.apk
    ```
 
 5. The app appears as **FireIPTV** under **Apps** on the stick. `adb install -r` again to update; your playlists are kept.
@@ -67,10 +74,10 @@ Gradle comes with the repo (`./gradlew`); nothing else to install.
 3. On the PC, serve the APK on your home network:
 
    ```bash
-   cd app/build/outputs/apk/debug && python3 -m http.server 8000
+   cd app/build/outputs/apk/release && python3 -m http.server 8000
    ```
 
-4. In Downloader, open `http://<pc-ip>:8000/app-debug.apk` and choose **Install**. Stop the server afterwards (Ctrl+C).
+4. In Downloader, open `http://<pc-ip>:8000/app-release.apk` and choose **Install**. Stop the server afterwards (Ctrl+C).
 
 ## First start
 

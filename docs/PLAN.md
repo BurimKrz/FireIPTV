@@ -166,8 +166,8 @@ Phase 0 is mostly done today; the task lists below track what remains in each ph
 **Phase 4: Release (weeks 11–12)**
 
 1. Performance pass against the full budget table on your stick, Baseline Profile updated.
-2. Release signing key, kept outside the repo, so every update installs over the last one without losing playlists or favourites.
-3. Signed, R8-shrunk release APK installed with `adb install -r`.
+2. Release signing key, kept outside the repo, so every update installs over the last one without losing playlists or favourites. Done on 2026-10-23: a 4096-bit RSA key in ~/.android/fireiptv-release.jks, its path and random password in ~/.gradle/gradle.properties; the build reads them as Gradle properties, so CI can pass the same values as secrets. Both files need a backup.
+3. Signed, R8-shrunk release APK installed with `adb install -r`. Done on 2026-10-23: 2.5 MB (debug is 18 MB). Tested on the Fire OS 16 emulator with your playlist: import, lists, logos, search, playback (first frame 1.2 s), favourites, Account and Groups all work, no crashes or missing classes. A second release build installed over the first kept the playlist, favourite and recents. Fixed on the way: Back into Settings now returns to the row you opened.
 4. A week of daily use, fixing what comes up.
 
 **Added to phase 4: updates from GitHub** (asked 2026-10-23). Once the release build is on the TV, a new version reaches it by pushing to GitHub: the app shows that an update exists and installs it when you say so.
@@ -225,4 +225,4 @@ The biggest risks are platform policy and shrinking reach, not code.
 - [ ] Repo hosting: done, private repo BurimKrz/FireIPTV. For in-app updates the app must read releases without a login. Recommended: a small public repo that holds only the release APKs, filled by the workflow; the code stays private. The alternatives are making this repo public, or putting a GitHub token in the app, which anyone with the APK could pull out.
 - [ ] Which legal test streams do we use for fixtures?
 
-**Next up:** phase 4, release build: a signing key kept outside the repo, then an R8-shrunk release APK tested on the emulator. Gate 1 (zap time on your Fire TV Stick) waits for the stick and this PC to be on the same network: the stick is on 192.168.10.x, the PC on 192.168.0.x.
+**Next up:** the GitHub release workflow and in-app update check, once you choose where releases live (open question below). Gates 1–3 need the stick reachable over adb. Gate 1 (zap time on your Fire TV Stick) waits for the stick and this PC to be on the same network: the stick is on 192.168.10.x, the PC on 192.168.0.x.
