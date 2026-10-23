@@ -124,6 +124,22 @@ If the internet drops, the player shows "No internet connection" and starts the 
 
 Refresh only runs when you press it. Nothing updates in the background, and the stream closes as soon as you leave the player or press Home. Each channel logo downloads once (about 25 KB) and is kept in a 50 MB cache; logos for rows you scroll past are not fetched, and turning logos off in Settings stops all logo downloads.
 
+## Data use
+
+Measured on 2026-10-23 with an Xtream provider (MPEG-TS streams):
+
+| What | Data |
+| --- | --- |
+| Watching an HD channel | about 1.1 GB per hour |
+| Watching the SD version of the same channel | about 0.7 GB per hour |
+| Opening a channel | 2–3 MB extra at the start (the provider sends a few seconds at once) |
+| Refreshing the playlist | about 0.7 MB |
+| Opening Settings → Account | about 1 KB |
+| A channel logo, the first time it is shown | about 25 KB, then never again |
+| Home screen, Settings, app in the background, playback stopped | nothing |
+
+Video is almost all of it. Picking a channel's SD version is the one choice that changes the total much.
+
 ## Run on the emulator (development)
 
 ```bash
