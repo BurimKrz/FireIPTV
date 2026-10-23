@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -65,11 +66,27 @@ class BrowseViewModel @Inject constructor(
         if (id == null) {
             flowOf(emptyList())
         } else {
-            combine(channelRepository.favoriteCount(id), channelRepository.recentCount(id), channelRepository.groups(id)) { favorites, recents, groups ->
+            combine(
+                channelRepository.visibleCount(id),
+                channelRepository.favoriteCount(id),
+                channelRepository.recentCount(id),
+                channelRepository.groups(id),
+            ) { all, favorites, recents, groups ->
                 listOf(
+                    GroupRow(ChannelList.All, "All channels", all),
                     GroupRow(ChannelList.Favorites, "Favourites", favorites),
                     GroupRow(ChannelList.Recents, "Recently watched", recents),
                 ) + groups.map { GroupRow(ChannelList.Group(it.id), it.title, it.channelCount) }
+            }
+        }
+    }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
+    init {
+        // A group hidden in settings (or gone after a refresh) can't stay open: fall back to all channels.
+        viewModelScope.launch {
+            groups.collect { rows ->
+                val selected = selectedList.value
+                if (selected is ChannelList.Group && rows.none { it.list == selected }) selectedList.value = ChannelList.All
             }
         }
     }
@@ -86,11 +103,10 @@ class BrowseViewModel @Inject constructor(
 
     val uiState: StateFlow<BrowseUiState> =
         combine(playlist, groups, selectedList, playlistRepository.importState) { playlist, groups, selected, import ->
-            val all = playlist?.let { GroupRow(ChannelList.All, "All channels", it.channelCount) }
             BrowseUiState(
                 loading = false,
                 playlist = playlist,
-                groups = listOfNotNull(all) + groups,
+                groups = groups,
                 selectedList = selected,
                 importState = import,
             )

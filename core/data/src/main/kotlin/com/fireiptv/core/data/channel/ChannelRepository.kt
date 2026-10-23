@@ -5,6 +5,7 @@ import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import com.fireiptv.core.data.db.ChannelEntity
 import com.fireiptv.core.data.db.FavoriteEntity
+import com.fireiptv.core.data.db.GroupSetting
 import com.fireiptv.core.data.db.ChannelListItem
 import com.fireiptv.core.data.db.ChannelSearchItem
 import com.fireiptv.core.data.db.GroupSummary
@@ -23,7 +24,18 @@ class ChannelRepository @Inject constructor(db: PlayerDatabase) {
     private val channelDao = db.channelDao()
     private val libraryDao = db.libraryDao()
 
+    /** Groups the user hasn't hidden. */
     fun groups(playlistId: Long): Flow<List<GroupSummary>> = groupDao.observeSummaries(playlistId)
+
+    /** Every group with its hidden flag, for settings. */
+    fun groupSettings(playlistId: Long): Flow<List<GroupSetting>> = groupDao.observeSettings(playlistId)
+
+    suspend fun setGroupHidden(groupId: Long, hidden: Boolean) = groupDao.setHidden(groupId, hidden)
+
+    suspend fun setAllGroupsHidden(playlistId: Long, hidden: Boolean) = groupDao.setAllHidden(playlistId, hidden)
+
+    /** The size of "All channels": channels outside hidden groups. */
+    fun visibleCount(playlistId: Long): Flow<Int> = channelDao.observeVisibleCount(playlistId)
 
     fun favoriteCount(playlistId: Long): Flow<Int> = libraryDao.observeFavoriteCount(playlistId)
 

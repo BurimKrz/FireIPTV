@@ -45,6 +45,17 @@ data class StreamRequest(
     val label: String,
 )
 
+/** How much media to have before playback starts, and before it resumes after a stall. */
+data class BufferSettings(val startMs: Int, val resumeMs: Int, val minBufferMs: Int) {
+    companion object {
+        /** Live zaps want speed; a stall waits 2.5 s so it doesn't stutter. */
+        val FAST_START = BufferSettings(startMs = 1_000, resumeMs = 2_500, minBufferMs = 15_000)
+
+        /** Starts a second or two later, then rides out weak Wi-Fi with fewer pauses. */
+        val STABLE = BufferSettings(startMs = 2_500, resumeMs = 5_000, minBufferMs = 25_000)
+    }
+}
+
 sealed interface PlaybackStatus {
     data object Idle : PlaybackStatus
     data object Loading : PlaybackStatus
@@ -64,12 +75,12 @@ sealed interface PlaybackStatus {
 class PlayerManager @Inject constructor(
     @ApplicationContext context: Context,
     private val client: OkHttpClient,
+    buffer: BufferSettings,
 ) {
     val player: ExoPlayer = ExoPlayer.Builder(context)
         .setLoadControl(
             DefaultLoadControl.Builder()
-                // Start after 1 s of media: live zaps want speed; a stall waits for 2.5 s to avoid stutter.
-                .setBufferDurationsMs(15_000, 30_000, 1_000, 2_500)
+                .setBufferDurationsMs(buffer.minBufferMs, maxOf(buffer.minBufferMs, 30_000), buffer.startMs, buffer.resumeMs)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build(),
         )

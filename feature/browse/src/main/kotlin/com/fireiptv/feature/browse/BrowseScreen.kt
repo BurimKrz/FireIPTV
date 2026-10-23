@@ -53,7 +53,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun BrowseScreen(
-    onOpenPlaylists: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenSearch: () -> Unit,
     onAddPlaylist: () -> Unit,
     /** [list] is the list the channel was picked from, for zapping. */
@@ -78,7 +78,7 @@ fun BrowseScreen(
             .padding(horizontal = 48.dp, vertical = 27.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Header(state, onOpenPlaylists, onOpenSearch)
+        Header(state, onOpenSettings, onOpenSearch)
         when {
             state.loading -> Unit
             state.playlist == null -> NoPlaylist(onAddPlaylist)
@@ -97,7 +97,7 @@ fun BrowseScreen(
 }
 
 @Composable
-private fun Header(state: BrowseUiState, onOpenPlaylists: () -> Unit, onOpenSearch: () -> Unit) {
+private fun Header(state: BrowseUiState, onOpenSettings: () -> Unit, onOpenSearch: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(state.playlist?.name ?: "FireIPTV", style = MaterialTheme.typography.headlineSmall, maxLines = 1)
         when (val import = state.importState) {
@@ -119,7 +119,7 @@ private fun Header(state: BrowseUiState, onOpenPlaylists: () -> Unit, onOpenSear
         Spacer(Modifier.weight(1f))
         if (state.playlist != null) {
             OutlinedButton(onClick = onOpenSearch) { Text("Search") }
-            OutlinedButton(onClick = onOpenPlaylists) { Text("Playlists") }
+            OutlinedButton(onClick = onOpenSettings) { Text("Settings") }
         }
     }
 }

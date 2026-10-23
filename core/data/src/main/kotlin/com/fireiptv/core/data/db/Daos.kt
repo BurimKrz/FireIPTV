@@ -19,6 +19,9 @@ data class PlaylistSummary(
     val groupCount: Int,
 )
 
+/** A group as the groups settings screen shows it. */
+data class GroupSetting(val id: Long, val title: String, val channelCount: Int, val hidden: Boolean)
+
 /** A group with its channel count, for the browse screen's groups column. */
 data class GroupSummary(val id: Long, val title: String, val channelCount: Int)
 
@@ -82,14 +85,26 @@ interface PlaylistDao {
     @Query("UPDATE channel_group SET playlistId = :to WHERE playlistId = :from")
     suspend fun moveGroups(from: Long, to: Long)
 
-    /** Replaces [targetId]'s channels and groups with the staging playlist's, in one transaction. */
+    @Query("SELECT title FROM channel_group WHERE playlistId = :playlistId AND hidden = 1")
+    suspend fun hiddenGroupTitles(playlistId: Long): List<String>
+
+    @Query("UPDATE channel_group SET hidden = 1 WHERE playlistId = :playlistId AND title IN (:titles)")
+    suspend fun hideGroups(playlistId: Long, titles: List<String>)
+
+    /**
+     * Replaces [targetId]'s channels and groups with the staging playlist's, in one transaction.
+     * Groups the user hid stay hidden, matched by title.
+     */
     @Transaction
     suspend fun swapStaging(stagingId: Long, targetId: Long) {
+        val hidden = hiddenGroupTitles(targetId)
         deleteChannels(targetId)
         deleteGroups(targetId)
         moveGroups(stagingId, targetId)
         moveChannels(stagingId, targetId)
         delete(stagingId)
+        // Old Android caps a query at 999 arguments.
+        hidden.chunked(500).forEach { hideGroups(targetId, it) }
     }
 }
 
@@ -114,6 +129,23 @@ interface GroupDao {
 
     @Query("SELECT title FROM channel_group WHERE id = :id")
     suspend fun title(id: Long): String?
+
+    /** Every group, hidden ones too, for the groups settings screen. */
+    @Query(
+        """
+        SELECT g.id, g.title, (SELECT COUNT(*) FROM channel c WHERE c.groupId = g.id) AS channelCount, g.hidden
+        FROM channel_group g
+        WHERE g.playlistId = :playlistId
+        ORDER BY g.sortOrder
+        """,
+    )
+    fun observeSettings(playlistId: Long): Flow<List<GroupSetting>>
+
+    @Query("UPDATE channel_group SET hidden = :hidden WHERE id = :id")
+    suspend fun setHidden(id: Long, hidden: Boolean)
+
+    @Query("UPDATE channel_group SET hidden = :hidden WHERE playlistId = :playlistId")
+    suspend fun setAllHidden(playlistId: Long, hidden: Boolean)
 }
 
 @Dao
@@ -131,7 +163,7 @@ interface ChannelDao {
     @Query(
         """
         SELECT id, name, number, sortOrder, $IS_FAVORITE FROM channel c
-        WHERE playlistId = :playlistId
+        WHERE playlistId = :playlistId AND $NOT_IN_HIDDEN_GROUP
         ORDER BY sortOrder
         """,
     )
@@ -164,16 +196,20 @@ interface ChannelDao {
     @Query("SELECT COUNT(*) FROM channel WHERE playlistId = :playlistId")
     suspend fun count(playlistId: Long): Int
 
+    /** Channels in "All channels": everything outside hidden groups. */
+    @Query("SELECT COUNT(*) FROM channel c WHERE playlistId = :playlistId AND $NOT_IN_HIDDEN_GROUP")
+    fun observeVisibleCount(playlistId: Long): Flow<Int>
+
     @Query("SELECT * FROM channel WHERE id = :id")
     suspend fun get(id: Long): ChannelEntity?
 
-    // Zapping and list positions. A null groupId means the whole playlist; both use sortOrder,
-    // the same order the browse lists show.
+    // Zapping and list positions. A null groupId means all channels outside hidden groups; both
+    // use sortOrder, the same order the browse lists show.
 
     @Query(
         """
-        SELECT * FROM channel
-        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND sortOrder > :sortOrder
+        SELECT * FROM channel c
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP) AND sortOrder > :sortOrder
         ORDER BY sortOrder LIMIT 1
         """,
     )
@@ -181,8 +217,8 @@ interface ChannelDao {
 
     @Query(
         """
-        SELECT * FROM channel
-        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND sortOrder < :sortOrder
+        SELECT * FROM channel c
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP) AND sortOrder < :sortOrder
         ORDER BY sortOrder DESC LIMIT 1
         """,
     )
@@ -190,8 +226,8 @@ interface ChannelDao {
 
     @Query(
         """
-        SELECT * FROM channel
-        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId)
+        SELECT * FROM channel c
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP)
         ORDER BY sortOrder LIMIT 1
         """,
     )
@@ -199,8 +235,8 @@ interface ChannelDao {
 
     @Query(
         """
-        SELECT * FROM channel
-        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId)
+        SELECT * FROM channel c
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP)
         ORDER BY sortOrder DESC LIMIT 1
         """,
     )
@@ -208,8 +244,8 @@ interface ChannelDao {
 
     @Query(
         """
-        SELECT COUNT(*) FROM channel
-        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND sortOrder < :sortOrder
+        SELECT COUNT(*) FROM channel c
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP) AND sortOrder < :sortOrder
         """,
     )
     suspend fun position(playlistId: Long, groupId: Long?, sortOrder: Int): Int
@@ -218,3 +254,7 @@ interface ChannelDao {
 /** Whether channel `c` is a favourite: one primary-key probe per row. */
 internal const val IS_FAVORITE =
     "EXISTS(SELECT 1 FROM favorite f WHERE f.playlistId = c.playlistId AND f.streamUrl = c.streamUrl) AS favorite"
+
+/** Channel `c` is not in a group the user hid. */
+internal const val NOT_IN_HIDDEN_GROUP =
+    "NOT EXISTS(SELECT 1 FROM channel_group hg WHERE hg.id = c.groupId AND hg.hidden = 1)"

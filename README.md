@@ -17,6 +17,7 @@ The build plan, phases and what's done so far: [docs/PLAN.md](docs/PLAN.md).
 | Full-screen live TV (MPEG-TS and HLS), zapping with Up/Down | |
 | Favourites and recently watched, kept across refreshes | |
 | Search by channel name, on the TV (no network) | |
+| Settings: hide groups, channel start Fast/Stable | |
 
 ## Yes, you can install it as an APK
 
@@ -95,7 +96,7 @@ The app opens on the add screen with the URL filled in and the **Import** button
 | Long-press OK, or Menu (☰), on a channel | Adds it to Favourites, or removes it (★ marks favourites) |
 | Left from the channel list | Back to the group you came from |
 | **Search** button (top right) | Search channel names as you type; case and accents don't matter ("kosove" finds "KOSOVË") |
-| **Playlists** button (top right) | Refresh or delete a playlist, add another |
+| **Settings** button (top right) | Playlists (refresh, delete, add), Groups (hide the ones you never watch), Channel start (Fast or Stable) |
 | Back on home | Leaves the app |
 
 **Search**

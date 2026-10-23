@@ -132,4 +132,22 @@ class LibraryTest {
         assertEquals(null, repository.position(channelNamed("Channel 0"), ChannelList.Recents))
         assertFalse(repository.toggleFavorite(-1))
     }
+
+    @Test
+    fun hiddenGroupLeavesAllChannelsAndStaysHiddenAfterRefresh() = runTest {
+        import(playlist(50)) // groups of ten: "Group 0" .. "Group 4"
+        val group1 = repository.groupSettings(playlistId).first().first { it.title == "Group 1" }
+        repository.setGroupHidden(group1.id, true)
+
+        assertEquals(40, repository.visibleCount(playlistId).first())
+        // Zapping through all channels skips the hidden group: 9 is followed by 20.
+        assertEquals("Channel 20", repository.neighbour(channelNamed("Channel 9"), ChannelList.All, forward = true)!!.name)
+        assertEquals(10, repository.position(channelNamed("Channel 20"), ChannelList.All))
+
+        import(playlist(60)) // refresh replaces every group row
+
+        val hidden = repository.groupSettings(playlistId).first().filter { it.hidden }.map { it.title }
+        assertEquals(listOf("Group 1"), hidden)
+        assertEquals(50, repository.visibleCount(playlistId).first())
+    }
 }

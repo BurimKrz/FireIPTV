@@ -28,7 +28,7 @@ class PlayerManagerTest {
         // A long read timeout, so only the stall watchdog can explain a quick second request.
         val client = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build()
         instrumentation.runOnMainSync {
-            manager = PlayerManager(ApplicationProvider.getApplicationContext<Context>(), client)
+            manager = PlayerManager(ApplicationProvider.getApplicationContext<Context>(), client, BufferSettings.FAST_START)
         }
     }
 
