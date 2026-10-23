@@ -224,5 +224,9 @@ The biggest risks are platform policy and shrinking reach, not code.
 - [ ] Your stick's IP address, once ADB debugging is on.
 - [ ] Repo hosting: done, private repo BurimKrz/FireIPTV. For in-app updates the app must read releases without a login. Recommended: a small public repo that holds only the release APKs, filled by the workflow; the code stays private. The alternatives are making this repo public, or putting a GitHub token in the app, which anyone with the APK could pull out.
 - [ ] Which legal test streams do we use for fixtures?
+- [ ] Stick reachable over adb for Gates 1–3: it sits behind a second router (192.168.10.x) while this PC is on the ISP router (192.168.0.x). Either connect the stick to the ISP router's Wi-Fi for the measurements, or forward port 5555 on the second router to the stick.
+- [ ] Where GitHub releases live, for in-app updates: a public releases-only repo (recommended), this repo public, or a token in the app.
+
+**Status at end of 2026-10-23:** phases 1–3 done, phase 4 steps 2–3 done (signed release APK). Waiting on the two open questions above. Pushed to GitHub up to the release build.
 
 **Next up:** the GitHub release workflow and in-app update check, once you choose where releases live (open question below). Gates 1–3 need the stick reachable over adb. Gate 1 (zap time on your Fire TV Stick) waits for the stick and this PC to be on the same network: the stick is on 192.168.10.x, the PC on 192.168.0.x.
