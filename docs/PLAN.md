@@ -182,6 +182,16 @@ Phase 0 is mostly done today; the task lists below track what remains in each ph
 
 **Added 2026-11-06: MP2 audio and late stalls.** Most Albanian channels (Klan, Top Channel, First TV, RTSH, Super Sport) carry MP2 audio, which neither Fire OS nor the emulator can decode, so they played silent. `:core:ffmpeg` adds media3's FFmpeg audio renderer with an mp3-decoder-only library (covers MP1 to MP3) built by `tools/build-ffmpeg.sh`. It only takes tracks the device can't decode, so AAC and AC-3 stay on the hardware. Release APKs carry the ARM copies only, 3.7 MB in all. Confirmed on your stick: sound on several MP2 channels. The stall watchdog now also covers a stream that freezes after it started: no data means up to 3 reopens, data that arrives but doesn't play means one reopen, then an error. AL| TOP CHANNEL (all four copies, even "SD") is 1080i sent as separate fields with no IDR frames: the emulator's software decoder freezes on it after one frame, Televizo on your phone fails the same way, and it plays on the stick.
 
+**Ideas for after the test week** (not decided; each costs no extra network unless noted):
+
+- [ ] Crash and error log in Settings: the last few crashes and player errors, readable on the TV. Without adb on the stick, a crash during the test week is otherwise invisible.
+- [ ] Previous channel: one button (Left or Right while watching) jumps back to the last channel, for switching between two.
+- [ ] Audio track choice for channels that carry more than one language.
+- [ ] Picture size for channels sent in the wrong shape (4:3 stretched): fit, fill, zoom.
+- [ ] Start on the last watched channel when the app opens (a setting, off by default).
+- [ ] "Refreshed N days ago" next to the playlist, so a stale list is noticed; still refreshed only on OK.
+- [ ] Lint in CI, once the existing warnings are cleared.
+
 **Gate 3: the release build meets the performance budget on your stick.** Dropping the Appstore work (store assets, Amazon testing, review) shortens this phase.
 
 ## Testing and deployment
