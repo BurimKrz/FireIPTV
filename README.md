@@ -137,7 +137,7 @@ The app opens on the add screen with the URL filled in and the **Import** button
 | Left from the channel list | Back to the group you came from |
 | **Search** button (top right) | Search channel names as you type; case and accents don't matter ("kosove" finds "KOSOVË") |
 | **Settings** button (top right) | Playlists (refresh, delete, add), Account (status, expiry, connections), Groups (hide the ones you never watch), Channel start (Fast or Stable), Channel logos (On or Off), Updates, Log |
-| Back on home | Leaves the app |
+| Back on home | Shows "Press Back again to exit"; a second press within 2 s leaves the app |
 
 The groups column lists All channels, Favourites and Recently watched, then pinned groups and categories, then your own categories, then the provider's groups. Your categories, like favourites, follow a channel through a refresh. "Refreshed N days ago" next to the playlist name says how old the list is; it only refreshes when you press Refresh in Settings → Playlists.
 

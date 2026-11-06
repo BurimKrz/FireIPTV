@@ -1,5 +1,9 @@
 package com.fireiptv.feature.browse
 
+import android.os.SystemClock
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -34,6 +39,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,10 +56,10 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.playlist.ImportState
-import com.fireiptv.feature.browse.options.ChannelOptionsDialog
-import com.fireiptv.feature.browse.options.GroupOptionsDialog
 import com.fireiptv.core.ui.ChannelLogo
 import com.fireiptv.core.ui.rememberScrollIdle
+import com.fireiptv.feature.browse.options.ChannelOptionsDialog
+import com.fireiptv.feature.browse.options.GroupOptionsDialog
 import kotlinx.coroutines.delay
 import java.util.concurrent.TimeUnit
 import kotlin.math.ceil
@@ -77,6 +83,21 @@ fun BrowseScreen(
     // Long-press menus: one for a channel, one for a group or category.
     var channelOptions by remember { mutableStateOf<Long?>(null) }
     var groupOptions by remember { mutableStateOf<GroupRow?>(null) }
+
+    // Home is the first screen, so Back here leaves the app: ask for a second press, so a stray
+    // press while browsing doesn't close it.
+    val activity = LocalActivity.current
+    val context = LocalContext.current
+    var backPressedAt by remember { mutableLongStateOf(0L) }
+    BackHandler {
+        val now = SystemClock.elapsedRealtime()
+        if (now - backPressedAt < EXIT_CONFIRM_MS) {
+            activity?.finish()
+        } else {
+            backPressedAt = now
+            Toast.makeText(context, "Press Back again to exit", Toast.LENGTH_SHORT).show()
+        }
+    }
     LaunchedEffect(Unit) {
         returnTarget = viewModel.takeReturnTarget()
         focusGroups = returnTarget == null
@@ -381,6 +402,7 @@ private fun ChannelItem(
 }
 
 private const val RETURN_FOCUS_FRAMES = 60
+private const val EXIT_CONFIRM_MS = 2_000L
 private const val EXPIRY_WARNING_DAYS = 7
 private val DAY_MS = TimeUnit.DAYS.toMillis(1).toDouble()
 private const val GROUP_SETTLE_MS = 250L
