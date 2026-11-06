@@ -179,6 +179,9 @@ class ChannelRepository @Inject constructor(db: PlayerDatabase) {
         libraryDao.trimRecents(channel.playlistId, keep = RECENTS_KEPT)
     }
 
+    /** Applies the limit to a list kept under an older, higher one, without waiting for the next watch. */
+    suspend fun trimRecents(playlistId: Long) = libraryDao.trimRecents(playlistId, keep = RECENTS_KEPT)
+
     private val lastPlayed = AtomicReference<Long?>(null)
 
     /** The player records each channel it opens, so the browser can return focus to it. */
@@ -189,7 +192,7 @@ class ChannelRepository @Inject constructor(db: PlayerDatabase) {
 
     private companion object {
         const val PAGE_SIZE = 60
-        const val RECENTS_KEPT = 30
+        const val RECENTS_KEPT = 20
         const val SEARCH_LIMIT = 300
         const val MAX_SEARCH_WORDS = 6
         val NOT_A_LETTER_OR_DIGIT = Regex("[^\\p{L}\\p{N}]+")

@@ -105,6 +105,10 @@ class BrowseViewModel @Inject constructor(
     }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     init {
+        viewModelScope.launch { playlistId.collect { id -> if (id != null) channelRepository.trimRecents(id) } }
+    }
+
+    init {
         // A group hidden in settings (or gone after a refresh) can't stay open: fall back to all channels.
         viewModelScope.launch {
             groups.collect { rows ->
