@@ -12,6 +12,8 @@ import com.fireiptv.core.data.db.ChannelListItem
 import com.fireiptv.core.data.db.PlaylistSummary
 import com.fireiptv.core.data.playlist.ImportState
 import com.fireiptv.core.data.playlist.PlaylistRepository
+import com.fireiptv.core.data.update.UpdateRepository
+import com.fireiptv.core.data.update.UpdateState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -53,7 +55,13 @@ data class BrowseUiState(
 class BrowseViewModel @Inject constructor(
     playlistRepository: PlaylistRepository,
     private val channelRepository: ChannelRepository,
+    updateRepository: UpdateRepository,
 ) : ViewModel() {
+
+    /** A newer version is on GitHub (from today's check), so Settings gets a hint. */
+    val updateAvailable: StateFlow<Boolean> = updateRepository.state
+        .map { it is UpdateState.Available || it is UpdateState.Ready }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     // v1 browses one playlist: the first one added.
     private val playlist = playlistRepository.playlists.map { it.firstOrNull() }

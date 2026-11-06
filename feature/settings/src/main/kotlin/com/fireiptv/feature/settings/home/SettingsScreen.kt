@@ -5,16 +5,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import android.content.ActivityNotFoundException
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -22,6 +27,7 @@ import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.settings.StartMode
+import com.fireiptv.core.data.update.UpdateState
 
 @Composable
 fun SettingsScreen(
@@ -32,6 +38,9 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val update by viewModel.update.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var installError by remember { mutableStateOf<String?>(null) }
     // Back from Playlists, Account or Groups lands on the row that opened it, not on the first row.
     var lastRow by rememberSaveable { mutableIntStateOf(ROW_PLAYLISTS) }
     val rows = remember { List(ROW_COUNT) { FocusRequester() } }
@@ -45,6 +54,8 @@ fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier
             .fillMaxSize()
+            // More rows than fit on a TV screen: focus scrolls the list.
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 96.dp, vertical = 48.dp),
     ) {
         Text("Settings", style = MaterialTheme.typography.headlineMedium, modifier = Modifier.padding(bottom = 16.dp))
@@ -98,6 +109,24 @@ fun SettingsScreen(
             onClick = { open(ROW_LOGOS, viewModel::toggleLogos) },
             modifier = rowModifier.focusRequester(rows[ROW_LOGOS]),
         )
+        val (updateTitle, updateDetail) = updateText(update, viewModel.installedVersion)
+        SettingRow(
+            title = updateTitle,
+            detail = installError ?: updateDetail,
+            onClick = {
+                open(ROW_UPDATES) {
+                    installError = null
+                    viewModel.onUpdate()?.let { installer ->
+                        try {
+                            context.startActivity(installer)
+                        } catch (e: ActivityNotFoundException) {
+                            installError = "This device has no app installer to open. Install the APK from the GitHub release page instead."
+                        }
+                    }
+                }
+            },
+            modifier = rowModifier.focusRequester(rows[ROW_UPDATES]),
+        )
         Text(
             "FireIPTV $appVersion",
             style = MaterialTheme.typography.bodySmall,
@@ -106,6 +135,20 @@ fun SettingsScreen(
         )
     }
 }
+
+private fun updateText(update: UpdateState, installed: String): Pair<String, String> = when (update) {
+    UpdateState.Unknown -> "Updates" to "Version $installed. OK to check GitHub for a newer one."
+    UpdateState.Checking -> "Updates" to "Checking GitHub…"
+    is UpdateState.UpToDate -> "Updates" to "Version $installed is the latest. OK to check again."
+    is UpdateState.Available -> "Update available: ${update.release.version}" to
+        "You have $installed. OK to download it (${megabytes(update.release.sizeBytes)}) and install."
+    is UpdateState.Downloading -> "Update ${update.release.version}" to "Downloading… ${update.percent}%"
+    is UpdateState.Ready -> "Update ${update.release.version} downloaded" to
+        "OK to install. Playlists, favourites and settings are kept."
+    is UpdateState.Failed -> "Updates" to "${update.message.trimEnd('.')}. OK to try again."
+}
+
+private fun megabytes(bytes: Long) = "%.1f MB".format(bytes / 1_048_576.0)
 
 @Composable
 private fun SettingRow(title: String, detail: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
@@ -123,4 +166,5 @@ private const val ROW_ACCOUNT = 1
 private const val ROW_GROUPS = 2
 private const val ROW_START = 3
 private const val ROW_LOGOS = 4
-private const val ROW_COUNT = 5
+private const val ROW_UPDATES = 5
+private const val ROW_COUNT = 6

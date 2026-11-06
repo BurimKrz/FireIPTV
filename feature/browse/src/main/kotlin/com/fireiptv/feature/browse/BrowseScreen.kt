@@ -66,6 +66,7 @@ fun BrowseScreen(
     viewModel: BrowseViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
     val channels = viewModel.channels.collectAsLazyPagingItems()
 
     // Coming back from the player, focus goes to the channel last watched; otherwise to the groups.
@@ -83,7 +84,7 @@ fun BrowseScreen(
             .padding(horizontal = 48.dp, vertical = 27.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Header(state, onOpenSettings, onOpenSearch)
+        Header(state, updateAvailable, onOpenSettings, onOpenSearch)
         when {
             state.loading -> Unit
             state.playlist == null -> NoPlaylist(onAddPlaylist)
@@ -102,7 +103,7 @@ fun BrowseScreen(
 }
 
 @Composable
-private fun Header(state: BrowseUiState, onOpenSettings: () -> Unit, onOpenSearch: () -> Unit) {
+private fun Header(state: BrowseUiState, updateAvailable: Boolean, onOpenSettings: () -> Unit, onOpenSearch: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(state.playlist?.name ?: "FireIPTV", style = MaterialTheme.typography.headlineSmall, maxLines = 1)
         // From the expiry saved at the last refresh: no request just to show this.
@@ -134,7 +135,7 @@ private fun Header(state: BrowseUiState, onOpenSettings: () -> Unit, onOpenSearc
         Spacer(Modifier.weight(1f))
         if (state.playlist != null) {
             OutlinedButton(onClick = onOpenSearch) { Text("Search") }
-            OutlinedButton(onClick = onOpenSettings) { Text("Settings") }
+            OutlinedButton(onClick = onOpenSettings) { Text(if (updateAvailable) "Settings · Update available" else "Settings") }
         }
     }
 }

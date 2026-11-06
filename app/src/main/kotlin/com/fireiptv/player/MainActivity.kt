@@ -20,6 +20,7 @@ import androidx.tv.material3.Surface
 import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.playlist.PlaylistRepository
 import com.fireiptv.core.data.settings.SettingsRepository
+import com.fireiptv.core.data.update.UpdateRepository
 import com.fireiptv.core.ui.FireTheme
 import com.fireiptv.core.ui.LocalLogosEnabled
 import com.fireiptv.feature.browse.BrowseScreen
@@ -39,6 +40,7 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var playlistRepository: PlaylistRepository
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var updateRepository: UpdateRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -58,6 +60,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // At most one small request a day; nothing is downloaded until the user asks.
+        updateRepository.checkIfDue()
     }
 
     companion object {

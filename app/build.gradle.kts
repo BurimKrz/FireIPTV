@@ -5,14 +5,17 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+val appVersion = "0.2.0"
+
 android {
     namespace = "com.fireiptv.player"
 
     defaultConfig {
         applicationId = "com.fireiptv.player"
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // Bump appVersion, then push the tag v<appVersion>: CI builds the release and the app finds it.
+        versionName = appVersion
+        versionCode = appVersion.split('.').map(String::toInt).let { (major, minor, patch) -> major * 10_000 + minor * 100 + patch }
     }
 
     // The release key lives outside the repo; its path and passwords come from ~/.gradle/gradle.properties
@@ -36,6 +39,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Fire TV sticks are ARM; the x86 FFmpeg copies only serve the emulators in debug builds.
+            ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
         }
     }
 

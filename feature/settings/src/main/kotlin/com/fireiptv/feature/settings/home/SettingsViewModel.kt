@@ -1,5 +1,6 @@
 package com.fireiptv.feature.settings.home
 
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.fireiptv.core.data.account.AccountRepository
@@ -7,6 +8,8 @@ import com.fireiptv.core.data.channel.ChannelRepository
 import com.fireiptv.core.data.playlist.PlaylistRepository
 import com.fireiptv.core.data.settings.SettingsRepository
 import com.fireiptv.core.data.settings.StartMode
+import com.fireiptv.core.data.update.UpdateRepository
+import com.fireiptv.core.data.update.UpdateState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -38,7 +41,11 @@ class SettingsViewModel @Inject constructor(
     channelRepository: ChannelRepository,
     accountRepository: AccountRepository,
     private val settings: SettingsRepository,
+    private val updates: UpdateRepository,
 ) : ViewModel() {
+
+    val update: StateFlow<UpdateState> = updates.state
+    val installedVersion: String = updates.installedVersion
 
     private val groups = playlistRepository.playlists
         .map { it.firstOrNull()?.id }
@@ -66,6 +73,18 @@ class SettingsViewModel @Inject constructor(
 
     fun toggleLogos() {
         viewModelScope.launch { settings.setLogosEnabled(!settings.logosEnabled.value) }
+    }
+
+    /** OK on the Updates row: checks, downloads, or returns the installer to start. */
+    fun onUpdate(): Intent? {
+        when (val state = updates.state.value) {
+            UpdateState.Unknown, is UpdateState.UpToDate -> updates.check()
+            is UpdateState.Available -> updates.download()
+            is UpdateState.Failed -> if (state.release != null) updates.download() else updates.check()
+            is UpdateState.Ready -> return updates.installIntent(state.apk)
+            UpdateState.Checking, is UpdateState.Downloading -> Unit
+        }
+        return null
     }
 
     fun toggleStartMode() {

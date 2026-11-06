@@ -41,6 +41,15 @@ It is shrunk with R8 and signed with your own release key, so every later releas
 
 **Back up both somewhere safe** (a USB stick, a password manager). If the key is lost, a new build can't update the app on the TV: it would have to be uninstalled first, which erases your playlists and favourites. Without those lines, `assembleRelease` still builds, but unsigned.
 
+**Updates from GitHub.** Releases are published by `.github/workflows/release.yml`:
+
+1. Raise `appVersion` in `app/build.gradle.kts` (the `versionCode` follows from it), commit.
+2. `git tag v0.2.0 && git push origin main v0.2.0`. CI builds the signed APK and attaches it to a GitHub release.
+
+The workflow signs with the same key, from four repository secrets: `FIREIPTV_KEYSTORE_BASE64` (`base64 -w0 ~/.android/fireiptv-release.jks`), `FIREIPTV_KEYSTORE_PASSWORD`, `FIREIPTV_KEY_ALIAS` and `FIREIPTV_KEY_PASSWORD`. The app checks the latest release at most once a day when it opens (one request of a few KB). When a newer one is out, Settings shows it, and OK downloads the APK and opens the system installer. The first time, Fire OS asks to allow FireIPTV to install apps.
+
+**MP2 audio** (most Albanian channels) needs `core/ffmpeg/src/main/jniLibs`, built once by `tools/build-ffmpeg.sh` (NDK 28). See `core/ffmpeg/README.md`.
+
 `./gradlew assembleDebug` builds a development version (~18 MB, debug-signed, with a "Leaks" memory checker icon). Debug and release builds have different keys, so switching a device from one to the other means uninstalling first.
 
 ## Build requirements

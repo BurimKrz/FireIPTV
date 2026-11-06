@@ -1,0 +1,64 @@
+# Pushing a tag v<appVersion> builds the signed release APK and publishes it as a GitHub release,
+# which the app finds with its daily update check.
+#
+# Needs four repository secrets (Settings → Secrets and variables → Actions):
+#   FIREIPTV_KEYSTORE_BASE64   base64 of ~/.android/fireiptv-release.jks
+#   FIREIPTV_KEYSTORE_PASSWORD
+#   FIREIPTV_KEY_ALIAS
+#   FIREIPTV_KEY_PASSWORD
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the app version
+        id: version
+        run: |
+          version=$(sed -nE 's/^val appVersion = "(.*)"/\1/p' app/build.gradle.kts)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag is $GITHUB_REF_NAME but app/build.gradle.kts says $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the signed APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.FIREIPTV_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.FIREIPTV_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.FIREIPTV_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.FIREIPTV_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::The FIREIPTV_* signing secrets are missing; a release signed with another key can't update the TV"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          ./gradlew --no-configuration-cache :app:assembleRelease \
+            -Pfireiptv.keystore="$RUNNER_TEMP/release.jks" \
+            -Pfireiptv.keystorePassword="$KEYSTORE_PASSWORD" \
+            -Pfireiptv.keyAlias="$KEY_ALIAS" \
+            -Pfireiptv.keyPassword="$KEY_PASSWORD"
+          rm "$RUNNER_TEMP/release.jks"
+          cp app/build/outputs/apk/release/app-release.apk "FireIPTV-${{ steps.version.outputs.version }}.apk"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: FireIPTV-${{ steps.version.outputs.version }}.apk
+          generate_release_notes: true
