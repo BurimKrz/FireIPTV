@@ -17,5 +17,5 @@ dependencyResolutionManagement {
 rootProject.name = "FireIPTV"
 
 include(":app")
-include(":core:data", ":core:parser", ":core:player", ":core:ui")
+include(":core:data", ":core:ffmpeg", ":core:parser", ":core:player", ":core:ui")
 include(":feature:browse", ":feature:player", ":feature:settings")

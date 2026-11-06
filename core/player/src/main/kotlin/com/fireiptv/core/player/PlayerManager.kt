@@ -83,7 +83,7 @@ sealed interface PlaybackStatus {
 class PlayerManager @Inject constructor(
     @ApplicationContext context: Context,
     private val client: OkHttpClient,
-    buffer: BufferSettings,
+    private val buffer: BufferSettings,
 ) {
     val player: ExoPlayer = ExoPlayer.Builder(context)
         .setLoadControl(
@@ -92,7 +92,12 @@ class PlayerManager @Inject constructor(
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build(),
         )
-        .setRenderersFactory(DefaultRenderersFactory(context).setEnableDecoderFallback(true))
+        .setRenderersFactory(
+            DefaultRenderersFactory(context)
+                .setEnableDecoderFallback(true)
+                // FFmpeg (:core:ffmpeg) only takes tracks the device can't decode, e.g. MP2 audio.
+                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON),
+        )
         .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
         .setHandleAudioBecomingNoisy(true)
         .build()
@@ -121,8 +126,10 @@ class PlayerManager @Inject constructor(
     private var current: StreamRequest? = null
     private var asHls = false
     private var retries = 0
+    private var stuckReopened = false
     private var retryJob: Job? = null
     private var stallJob: Job? = null
+    private var steadyJob: Job? = null
     private var zapStartedAt = 0L
 
     private val extractors = DefaultExtractorsFactory().setTsExtractorFlags(
@@ -136,11 +143,22 @@ class PlayerManager @Inject constructor(
             object : Player.Listener {
                 override fun onPlaybackStateChanged(state: Int) {
                     when (state) {
-                        Player.STATE_BUFFERING -> if (_status.value !is PlaybackStatus.Failed) _status.value = PlaybackStatus.Loading
+                        Player.STATE_BUFFERING -> {
+                            steadyJob?.cancel()
+                            if (_status.value !is PlaybackStatus.Failed) _status.value = PlaybackStatus.Loading
+                            // A stall after playback started gets the same watchdog as the first start.
+                            if (stallJob?.isActive != true) watchStall()
+                        }
                         Player.STATE_READY -> {
                             stallJob?.cancel()
-                            retries = 0
                             _status.value = PlaybackStatus.Playing
+                            // Retries refill only after steady playback, so a channel that keeps
+                            // dropping can't reopen (and re-download its burst) forever.
+                            steadyJob?.cancel()
+                            steadyJob = scope.launch {
+                                delay(STEADY_MS)
+                                retries = 0
+                            }
                         }
                         else -> Unit
                     }
@@ -165,6 +183,7 @@ class PlayerManager @Inject constructor(
     fun play(stream: StreamRequest) {
         current = stream
         retries = 0
+        stuckReopened = false
         asHls = isHls(stream.url)
         zapStartedAt = SystemClock.elapsedRealtime()
         open()
@@ -174,6 +193,7 @@ class PlayerManager @Inject constructor(
     fun resume() {
         if (current == null) return
         retries = 0
+        stuckReopened = false
         zapStartedAt = SystemClock.elapsedRealtime()
         open()
     }
@@ -182,6 +202,7 @@ class PlayerManager @Inject constructor(
     fun stop() {
         retryJob?.cancel()
         stallJob?.cancel()
+        steadyJob?.cancel()
         player.stop()
         _status.value = PlaybackStatus.Idle
     }
@@ -201,18 +222,70 @@ class PlayerManager @Inject constructor(
         player.setMediaSource(mediaSource(stream))
         player.prepare()
         player.playWhenReady = true
+        watchStall()
+    }
 
-        // A provider can accept the connection and then send nothing, e.g. while it still counts the
-        // previous stream against a one-connection account. Reopen instead of waiting for a timeout.
+    /**
+     * A provider can accept the connection and then send nothing, e.g. while it still counts the
+     * previous stream against a one-connection account. Reopen instead of waiting for a timeout.
+     * Data that arrives but doesn't play (a decoder stuck on the stream's format) gets one reopen,
+     * since repeating it would only re-download the same burst.
+     */
+    private fun watchStall() {
+        val stream = current ?: return
         stallJob?.cancel()
         stallJob = scope.launch {
-            delay(STALL_TIMEOUT_MS)
-            if (player.playbackState == Player.STATE_BUFFERING && retries < RETRY_DELAYS_MS.size) {
-                retries++
-                Log.w(TAG, "no data from ${stream.label} after $STALL_TIMEOUT_MS ms, reopening")
+            var buffered = player.totalBufferedDuration
+            while (true) {
+                delay(STALL_TIMEOUT_MS)
+                if (player.playbackState != Player.STATE_BUFFERING) return@launch
+                val now = player.totalBufferedDuration
+                val stuck = now >= buffer.resumeMs + STUCK_MARGIN_MS
+                when {
+                    !isOnline() -> {
+                        waitForNetwork()
+                        return@launch
+                    }
+                    stuck && !stuckReopened -> {
+                        stuckReopened = true
+                        Log.w(TAG, "${stream.label} has $now ms buffered but doesn't play, reopening")
+                    }
+                    stuck -> {
+                        fail("The stream keeps arriving but the picture doesn't move. This channel's video may not play on this device.")
+                        return@launch
+                    }
+                    // Still loading, just slowly: keep waiting.
+                    now > buffered -> {
+                        buffered = now
+                        continue
+                    }
+                    retries < RETRY_DELAYS_MS.size -> {
+                        retries++
+                        Log.w(TAG, "no data from ${stream.label} after $STALL_TIMEOUT_MS ms, reopening")
+                    }
+                    else -> {
+                        fail("The provider stopped sending this channel.")
+                        return@launch
+                    }
+                }
                 open()
+                return@launch
             }
         }
+    }
+
+    private fun waitForNetwork() {
+        retryJob?.cancel()
+        zapStartedAt = 0L
+        player.stop()
+        _status.value = PlaybackStatus.WaitingForNetwork
+    }
+
+    private fun fail(message: String, httpCode: Int? = null) {
+        zapStartedAt = 0L
+        // Closes the connection if it's still open: a one-connection account needs it for the next channel.
+        player.stop()
+        _status.value = PlaybackStatus.Failed(message, httpCode)
     }
 
     private fun mediaSource(stream: StreamRequest): MediaSource {
@@ -247,10 +320,7 @@ class PlayerManager @Inject constructor(
             }
             // Offline: retrying now can't work. Wait for the network callback instead of failing.
             error.isNetworkError() && !isOnline() -> {
-                retryJob?.cancel()
-                zapStartedAt = 0L
-                player.stop()
-                _status.value = PlaybackStatus.WaitingForNetwork
+                waitForNetwork()
                 return
             }
             error.isRetryable() && retries < RETRY_DELAYS_MS.size -> {
@@ -263,8 +333,7 @@ class PlayerManager @Inject constructor(
                 return
             }
         }
-        zapStartedAt = 0L
-        _status.value = PlaybackStatus.Failed(error.toMessage(), httpCode)
+        fail(error.toMessage(), httpCode)
     }
 
     private fun PlaybackException.isNetworkError(): Boolean = when (errorCode) {
@@ -320,6 +389,8 @@ class PlayerManager @Inject constructor(
         const val TAG = "FirePlayer"
         val RETRY_DELAYS_MS = longArrayOf(1_000, 3_000, 6_000)
         const val STALL_TIMEOUT_MS = 8_000L
+        const val STUCK_MARGIN_MS = 3_000
+        const val STEADY_MS = 30_000L
         val CONTAINER_ERRORS = setOf(
             PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
             PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,
