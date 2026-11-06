@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import android.content.ActivityNotFoundException
+import android.text.format.DateUtils
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -28,6 +29,8 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.settings.StartMode
 import com.fireiptv.core.data.update.UpdateState
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
 fun SettingsScreen(
@@ -139,13 +142,18 @@ fun SettingsScreen(
 private fun updateText(update: UpdateState, installed: String): Pair<String, String> = when (update) {
     UpdateState.Unknown -> "Updates" to "Version $installed. OK to check GitHub for a newer one."
     UpdateState.Checking -> "Updates" to "Checking GitHub…"
-    is UpdateState.UpToDate -> "Updates" to "Version $installed is the latest. OK to check again."
+    is UpdateState.UpToDate -> "Updates" to "Version $installed is the latest (checked ${checkedWhen(update.checkedAt)}). OK to check again."
     is UpdateState.Available -> "Update available: ${update.release.version}" to
         "You have $installed. OK to download it (${megabytes(update.release.sizeBytes)}) and install."
     is UpdateState.Downloading -> "Update ${update.release.version}" to "Downloading… ${update.percent}%"
     is UpdateState.Ready -> "Update ${update.release.version} downloaded" to
         "OK to install. Playlists, favourites and settings are kept."
     is UpdateState.Failed -> "Updates" to "${update.message.trimEnd('.')}. OK to try again."
+}
+
+private fun checkedWhen(at: Long): String {
+    val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(at))
+    return if (DateUtils.isToday(at)) "today at $time" else DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(at)) + " at $time"
 }
 
 private fun megabytes(bytes: Long) = "%.1f MB".format(bytes / 1_048_576.0)
