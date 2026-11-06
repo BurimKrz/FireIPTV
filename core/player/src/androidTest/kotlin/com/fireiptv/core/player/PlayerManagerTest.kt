@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.fireiptv.core.log.AppLog
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -28,7 +29,8 @@ class PlayerManagerTest {
         // A long read timeout, so only the stall watchdog can explain a quick second request.
         val client = OkHttpClient.Builder().readTimeout(60, TimeUnit.SECONDS).build()
         instrumentation.runOnMainSync {
-            manager = PlayerManager(ApplicationProvider.getApplicationContext<Context>(), client, BufferSettings.FAST_START)
+            val context = ApplicationProvider.getApplicationContext<Context>()
+            manager = PlayerManager(context, client, BufferSettings.FAST_START, AppLog(context))
         }
     }
 

@@ -19,6 +19,7 @@ room {
 
 dependencies {
     api(project(":core:parser"))
+    implementation(project(":core:log"))
 
     api(libs.okhttp)
     api(libs.room.runtime)

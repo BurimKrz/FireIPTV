@@ -5,6 +5,9 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.Player
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import androidx.paging.map
 import com.fireiptv.core.data.account.AccountRepository
 import com.fireiptv.core.data.account.AccountResult
 import com.fireiptv.core.data.channel.ChannelList
@@ -18,12 +21,14 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.DateFormat
@@ -41,6 +46,13 @@ data class BannerChannel(
     val favorite: Boolean = false,
 )
 
+/** A row of the channel list that Left/Right opens over the picture. */
+@Immutable
+data class PanelChannel(val id: Long, val number: Int, val name: String, val logoUrl: String?, val favorite: Boolean)
+
+/** The side list is open; it starts on the row at [startIndex], the channel in the banner. */
+data class PanelState(val title: String, val currentId: Long, val startIndex: Int)
+
 data class PlayerUiState(
     val channel: BannerChannel? = null,
     val bannerVisible: Boolean = true,
@@ -50,6 +62,7 @@ data class PlayerUiState(
     val missing: Boolean = false,
     /** Why the provider refused the stream, from the account status, when that explains it. */
     val accountNote: String? = null,
+    val panel: PanelState? = null,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -79,15 +92,32 @@ class PlayerViewModel @Inject constructor(
     private val bannerVisible = MutableStateFlow(true)
     private val missing = MutableStateFlow(false)
     private val accountNote = MutableStateFlow<String?>(null)
+    private val panel = MutableStateFlow<PanelState?>(null)
+
+    /** Set with the first channel: the playlist and list the side panel shows. */
+    private val panelSource = MutableStateFlow<Pair<Long, ChannelList>?>(null)
+
+    /** The side panel's channels; only queried while the panel is on screen. */
+    val panelChannels: Flow<PagingData<PanelChannel>> = panelSource
+        .flatMapLatest { source ->
+            if (source == null) {
+                flowOf(PagingData.empty())
+            } else {
+                channels.channels(source.first, source.second).map { page ->
+                    page.map { PanelChannel(it.id, it.number ?: (it.sortOrder + 1), it.name, it.logoUrl, it.favorite) }
+                }
+            }
+        }
+        .cachedIn(viewModelScope)
 
     val uiState: StateFlow<PlayerUiState> = combine(
         combine(banner, bannerFavorite) { channel, favorite -> channel?.copy(favorite = favorite) },
         bannerVisible,
         combine(playerManager.status, accountNote, ::Pair),
-        playerManager.lastZapMs,
-        missing,
-    ) { channel, visible, (status, note), zapMs, missing ->
-        PlayerUiState(channel, visible, status, zapMs, missing, note)
+        combine(playerManager.lastZapMs, missing, ::Pair),
+        panel,
+    ) { channel, visible, (status, note), (zapMs, missing), panel ->
+        PlayerUiState(channel, visible, status, zapMs, missing, note, panel)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PlayerUiState())
 
     private var target: ChannelEntity? = null
@@ -116,7 +146,9 @@ class PlayerViewModel @Inject constructor(
                 ChannelList.All, ChannelList.Recents -> "All channels"
                 ChannelList.Favorites -> "Favourites"
                 is ChannelList.Group -> channels.groupTitle(list.id).orEmpty()
+                is ChannelList.Custom -> channels.listTitle(list.id).orEmpty()
             }
+            panelSource.value = start.playlistId to zapList
             show(start)
             play(start)
 
@@ -173,6 +205,36 @@ class PlayerViewModel @Inject constructor(
         val channel = target ?: return
         viewModelScope.launch { channels.toggleFavorite(channel.id) }
         showBannerForAWhile()
+    }
+
+    /** Left/Right: the channels of the list being zapped, starting on the one in the banner. */
+    fun togglePanel() {
+        if (panel.value != null) {
+            panel.value = null
+            return
+        }
+        val current = target ?: return
+        viewModelScope.launch {
+            val index = channels.position(current, zapList) ?: 0
+            panel.value = PanelState(listTitle, current.id, index)
+            hideBannerJob?.cancel()
+            bannerVisible.value = false
+        }
+    }
+
+    fun closePanel() {
+        panel.value = null
+    }
+
+    /** OK on a row of the side panel plays it at once and closes the panel. */
+    fun playFromPanel(channelId: Long) {
+        panel.value = null
+        viewModelScope.launch {
+            val channel = channels.channel(channelId) ?: return@launch
+            playJob?.cancel()
+            show(channel)
+            play(channel)
+        }
     }
 
     /** OK on a failed channel tries it again. */

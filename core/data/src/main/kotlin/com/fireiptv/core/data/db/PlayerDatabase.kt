@@ -15,8 +15,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ChannelFts::class,
         FavoriteEntity::class,
         RecentEntity::class,
+        UserListEntity::class,
+        UserListEntryEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -24,6 +26,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         // v4 changed the search tokenizer; Room recreates the index and refills it from the channels.
         AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5),
+        // v6: the user's own categories, and pinned groups.
+        AutoMigration(from = 5, to = 6),
     ],
 )
 abstract class PlayerDatabase : RoomDatabase() {
@@ -31,6 +35,7 @@ abstract class PlayerDatabase : RoomDatabase() {
     abstract fun groupDao(): GroupDao
     abstract fun channelDao(): ChannelDao
     abstract fun libraryDao(): LibraryDao
+    abstract fun userListDao(): UserListDao
 
     companion object {
         fun build(context: Context, inMemory: Boolean = false): PlayerDatabase {

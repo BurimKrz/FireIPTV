@@ -30,9 +30,19 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/** A row of the groups column: all channels, favourites, recents or one group. */
+/** A row of the groups column: all channels, favourites, recents, one group or one of the user's categories. */
 @Immutable
-data class GroupRow(val list: ChannelList, val title: String, val channelCount: Int)
+data class GroupRow(
+    val list: ChannelList,
+    val title: String,
+    val channelCount: Int,
+    /** Epoch millis when pinned to the top, or null. */
+    val pinnedAt: Long? = null,
+) {
+    /** Groups and the user's categories can be pinned; All, Favourites and Recents always come first. */
+    val pinnable: Boolean get() = list is ChannelList.Group || list is ChannelList.Custom
+    val pinned: Boolean get() = pinnedAt != null
+}
 
 @Immutable
 data class ChannelRow(val id: Long, val number: Int, val name: String, val logoUrl: String?, val favorite: Boolean)
@@ -79,15 +89,24 @@ class BrowseViewModel @Inject constructor(
                 channelRepository.favoriteCount(id),
                 channelRepository.recentCount(id),
                 channelRepository.groups(id),
-            ) { all, favorites, recents, groups ->
+                channelRepository.userLists(id),
+            ) { all, favorites, recents, groups, lists ->
+                val mine = lists.map { GroupRow(ChannelList.Custom(it.id), it.title, it.channelCount, it.pinnedAt) }
+                val provider = groups.map { GroupRow(ChannelList.Group(it.id), it.title, it.channelCount, it.pinnedAt) }
+                // Pinned ones first, in the order they were pinned; then the user's own, then the provider's.
                 listOf(
                     GroupRow(ChannelList.All, "All channels", all),
                     GroupRow(ChannelList.Favorites, "Favourites", favorites),
                     GroupRow(ChannelList.Recents, "Recently watched", recents),
-                ) + groups.map { GroupRow(ChannelList.Group(it.id), it.title, it.channelCount) }
+                ) + (mine + provider).filter { it.pinned }.sortedBy { it.pinnedAt } +
+                    mine.filterNot { it.pinned } + provider.filterNot { it.pinned }
             }
         }
     }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
+    init {
+        viewModelScope.launch { playlistId.collect { id -> if (id != null) channelRepository.trimRecents(id) } }
+    }
 
     init {
         // A group hidden in settings (or gone after a refresh) can't stay open: fall back to all channels.
@@ -134,6 +153,21 @@ class BrowseViewModel @Inject constructor(
 
     fun toggleFavorite(channelId: Long) {
         viewModelScope.launch { channelRepository.toggleFavorite(channelId) }
+    }
+
+    /** Menu (☰) on a group or category pins it to the top of the column, or unpins it. */
+    fun togglePinned(row: GroupRow) {
+        if (!row.pinnable) return
+        viewModelScope.launch { channelRepository.setPinned(row.list, !row.pinned) }
+    }
+
+    fun renameList(listId: Long, title: String) {
+        viewModelScope.launch { channelRepository.renameList(listId, title.trim()) }
+    }
+
+    fun deleteList(listId: Long) {
+        if (selectedList.value == ChannelList.Custom(listId)) selectedList.value = ChannelList.All
+        viewModelScope.launch { channelRepository.deleteList(listId) }
     }
 
     // Channels without a tvg-chno are numbered by their place in the playlist, which stays the

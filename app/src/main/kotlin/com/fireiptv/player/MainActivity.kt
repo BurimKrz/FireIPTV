@@ -30,6 +30,7 @@ import com.fireiptv.feature.player.PlayerViewModel
 import com.fireiptv.feature.settings.account.AccountScreen
 import com.fireiptv.feature.settings.groups.GroupsScreen
 import com.fireiptv.feature.settings.home.SettingsScreen
+import com.fireiptv.feature.settings.log.LogScreen
 import com.fireiptv.feature.settings.playlists.AddPlaylistScreen
 import com.fireiptv.feature.settings.playlists.PlaylistsScreen
 import dagger.hilt.android.AndroidEntryPoint
@@ -81,6 +82,7 @@ private object Routes {
     const val SETTINGS = "settings"
     const val GROUPS = "settings/groups"
     const val ACCOUNT = "settings/account"
+    const val LOG = "settings/log"
     const val PLAYER = "player/{${PlayerViewModel.ARG_CHANNEL_ID}}?list={${PlayerViewModel.ARG_LIST}}"
 
     fun player(channelId: Long, list: ChannelList) = "player/$channelId?list=${list.encode()}"
@@ -125,6 +127,7 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
                 onOpenPlaylists = { navController.navigate(Routes.PLAYLISTS) },
                 onOpenGroups = { navController.navigate(Routes.GROUPS) },
                 onOpenAccount = { navController.navigate(Routes.ACCOUNT) },
+                onOpenLog = { navController.navigate(Routes.LOG) },
                 appVersion = BuildConfig.VERSION_NAME,
             )
         }
@@ -133,6 +136,9 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
         }
         composable(Routes.ACCOUNT) {
             AccountScreen()
+        }
+        composable(Routes.LOG) {
+            LogScreen()
         }
         composable(Routes.PLAYLISTS) {
             PlaylistsScreen(onAddPlaylist = { navController.navigate(Routes.ADD_PLAYLIST) })

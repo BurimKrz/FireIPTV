@@ -15,6 +15,7 @@ android {
 dependencies {
     api(libs.media3.exoplayer)
     implementation(project(":core:ffmpeg"))
+    implementation(project(":core:log"))
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.datasource.okhttp)
     implementation(libs.okhttp)

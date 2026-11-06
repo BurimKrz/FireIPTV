@@ -16,6 +16,8 @@ dependencies {
     implementation(project(":core:player"))
 
     implementation(libs.media3.ui.compose)
+    implementation(libs.paging.compose)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.hilt.android)

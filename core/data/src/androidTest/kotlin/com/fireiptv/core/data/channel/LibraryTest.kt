@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.fireiptv.core.data.db.ChannelEntity
 import com.fireiptv.core.data.db.PlayerDatabase
 import com.fireiptv.core.data.db.PlaylistEntity
+import com.fireiptv.core.data.db.RecentEntity
 import com.fireiptv.core.data.playlist.PlaylistImporter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -121,16 +122,32 @@ class LibraryTest {
     }
 
     @Test
-    fun recentsKeepTheNewest30() = runTest {
+    fun recentsKeepTheNewest20() = runTest {
         import(playlist(50))
         for (i in 0 until 35) {
             repository.recordWatched(channelNamed("Channel $i"))
             Thread.sleep(2)
         }
-        assertEquals(30, repository.recentCount(playlistId).first())
+        assertEquals(20, repository.recentCount(playlistId).first())
         assertEquals(0, repository.position(channelNamed("Channel 34"), ChannelList.Recents))
-        assertEquals(null, repository.position(channelNamed("Channel 0"), ChannelList.Recents))
+        assertEquals(null, repository.position(channelNamed("Channel 14"), ChannelList.Recents))
         assertFalse(repository.toggleFavorite(-1))
+    }
+
+    @Test
+    fun longerListFromAnOlderVersionIsTrimmedTo20() = runTest {
+        import(playlist(50))
+        // Version 0.2 kept 30.
+        for (i in 0 until 30) {
+            val channel = channelNamed("Channel $i")
+            db.libraryDao().upsertRecent(RecentEntity(playlistId, channel.streamUrl, channel.name, watchedAt = 1_000L + i))
+        }
+
+        repository.trimRecents(playlistId)
+
+        assertEquals(20, repository.recentCount(playlistId).first())
+        assertEquals(0, repository.position(channelNamed("Channel 29"), ChannelList.Recents))
+        assertEquals(null, repository.position(channelNamed("Channel 9"), ChannelList.Recents))
     }
 
     @Test

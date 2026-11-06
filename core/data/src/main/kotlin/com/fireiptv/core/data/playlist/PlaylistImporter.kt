@@ -239,6 +239,7 @@ class PlaylistImporter @Inject constructor(
         db.withTransaction {
             if (!inPlace) playlistDao.swapStaging(stagingId = written.targetId, targetId = playlist.id)
             db.libraryDao().relinkAfterImport(playlist.id)
+            db.userListDao().relinkAfterImport(playlist.id)
             playlistDao.update(playlist.update().copy(lastSync = System.currentTimeMillis()))
         }
     }
