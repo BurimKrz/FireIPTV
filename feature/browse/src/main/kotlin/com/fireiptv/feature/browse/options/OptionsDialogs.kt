@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -161,7 +162,15 @@ private fun NameEntry(label: String, initial: String, action: String, onDone: (S
     var name by remember { mutableStateOf(initial) }
     val field = remember { FocusRequester() }
     LaunchedEffect(Unit) { field.requestFocus() }
-    val submit = { if (name.isNotBlank()) onDone(name.trim()) }
+    // The field leaves the screen once the name is saved: close the keyboard first, so it isn't
+    // left attached to a field that no longer exists (the emulator's keyboard then kept the D-pad).
+    val keyboard = LocalSoftwareKeyboardController.current
+    val submit = {
+        if (name.isNotBlank()) {
+            keyboard?.hide()
+            onDone(name.trim())
+        }
+    }
     OutlinedTextField(
         value = name,
         onValueChange = { name = it },
