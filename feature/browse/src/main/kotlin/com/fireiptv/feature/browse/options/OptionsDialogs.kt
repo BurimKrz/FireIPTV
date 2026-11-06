@@ -21,6 +21,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -112,15 +117,31 @@ fun GroupOptionsDialog(
 
 @Composable
 private fun OptionsDialog(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    // The menu opens while OK is still held (a long press). Its release would click the first row,
+    // so OK counts only once a fresh press started inside the menu; held-key repeats don't count.
+    var okPressedHere by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onDismiss) {
         Surface(
+            modifier = Modifier.onPreviewKeyEvent { event ->
+                if (event.key != Key.DirectionCenter && event.key != Key.Enter && event.key != Key.NumPadEnter) {
+                    return@onPreviewKeyEvent false
+                }
+                when (event.type) {
+                    KeyEventType.KeyDown -> {
+                        if (event.nativeKeyEvent.repeatCount == 0) okPressedHere = true
+                        !okPressedHere
+                    }
+                    KeyEventType.KeyUp -> !okPressedHere
+                    else -> false
+                }
+            },
             colors = SurfaceDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
             shape = MaterialTheme.shapes.medium,
-            modifier = Modifier.width(560.dp),
         ) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
                 modifier = Modifier
+                    .width(560.dp)
                     .heightIn(max = 480.dp)
                     .verticalScroll(rememberScrollState())
                     .padding(24.dp),
