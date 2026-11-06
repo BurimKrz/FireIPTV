@@ -123,7 +123,7 @@ Phase 0 is mostly done today; the task lists below track what remains in each ph
 - [x] Gradle project, version catalog, nine modules, Fire TV manifest
 - [x] Debug APK installs and launches on the API 30 TV emulator (cold start 0.96 s)
 - [ ] `:benchmark` module: Macrobenchmark + Baseline Profile generator. Moved to just before Gate 1, because emulator timings don't predict the stick
-- [ ] Optional for personal use: CI on GitHub Actions running `assembleDebug`, `:core:parser:test` and lint on every push
+- [x] CI on GitHub Actions: `.github/workflows/ci.yml` builds debug and release and runs `:core:parser:test` on every push to `dev` and every pull request (2026-11-06). Lint is left out for now
 - [ ] Real devices: put your Fire TV Stick 4K (2nd gen) in developer mode and connect with `adb connect`
 - [ ] Test fixtures: a 50k-channel M3U, a 200 MB XMLTV, and a self-hosted test HLS + TS stream
 
@@ -170,13 +170,17 @@ Phase 0 is mostly done today; the task lists below track what remains in each ph
 3. Signed, R8-shrunk release APK installed with `adb install -r`. Done on 2026-10-23: 2.5 MB (debug is 18 MB). Tested on the Fire OS 16 emulator with your playlist: import, lists, logos, search, playback (first frame 1.2 s), favourites, Account and Groups all work, no crashes or missing classes. A second release build installed over the first kept the playlist, favourite and recents. Fixed on the way: Back into Settings now returns to the row you opened.
 4. A week of daily use, fixing what comes up.
 
-**Added to phase 4: updates from GitHub** (asked 2026-10-23). Once the release build is on the TV, a new version reaches it by pushing to GitHub: the app shows that an update exists and installs it when you say so.
+**Added to phase 4: updates from GitHub** (asked 2026-10-23). Done on 2026-11-06 and confirmed on your stick: 0.2.0 was installed by hand, then 0.2.1 arrived through the app. The repo is public, so the app reads releases without a login.
 
-1. Release signing key stored as a GitHub Actions secret, so APKs built on GitHub install over the one on the TV. Android refuses an update signed with a different key, and uninstalling first would erase playlists and favourites.
-2. GitHub Actions workflow: pushing a version tag such as `v0.2.0` builds the signed release APK, takes versionCode from the tag, and publishes a GitHub release with the APK attached.
-3. Update check when the app opens, at most once a day, plus a "Check for updates" button in settings. It is one small request (a few KB) for the latest release; nothing checks in the background, in line with the data-use rule.
-4. When a newer version exists, home shows "Update 0.2.0 available" with an Install button. Nothing downloads until you press it.
-5. Install: download the APK (about 15 MB) once, check its signature and version, and hand it to Android's installer. The first time, Fire OS asks you to allow FireIPTV to install apps; after that each update is one confirmation, and playlists and favourites are kept.
+1. Release signing key stored as four GitHub Actions secrets (`FIREIPTV_*`), so APKs built on GitHub install over the one on the TV. Android refuses an update signed with a different key, and uninstalling first would erase playlists and favourites.
+2. `.github/workflows/release.yml`: pushing a tag `v<appVersion>` builds the signed release APK and publishes a GitHub release with `FireIPTV-<version>.apk`. `appVersion` lives in `app/build.gradle.kts`, versionCode follows from it, and the run stops if the tag and the version disagree.
+3. Update check when the app opens, at most once a day (one request of a few KB to `releases/latest`), plus OK on Settings → Updates to check now. Nothing checks in the background.
+4. When a newer version exists, home shows "Settings · Update available" and Settings → Updates names it. Nothing downloads until you press OK.
+5. Install: the APK (3.7 MB) downloads once, its signer is compared with the installed app, and Android's installer takes over. The first time, Fire OS asks you to allow FireIPTV to install apps; playlists and favourites are kept.
+
+**Branches:** work happens on `dev` and reaches `main` through a pull request, with CI on both. A release is a tag on `main`, so merging alone never ships anything.
+
+**Added 2026-11-06: MP2 audio and late stalls.** Most Albanian channels (Klan, Top Channel, First TV, RTSH, Super Sport) carry MP2 audio, which neither Fire OS nor the emulator can decode, so they played silent. `:core:ffmpeg` adds media3's FFmpeg audio renderer with an mp3-decoder-only library (covers MP1 to MP3) built by `tools/build-ffmpeg.sh`. It only takes tracks the device can't decode, so AAC and AC-3 stay on the hardware. Release APKs carry the ARM copies only, 3.7 MB in all. Confirmed on your stick: sound on several MP2 channels. The stall watchdog now also covers a stream that freezes after it started: no data means up to 3 reopens, data that arrives but doesn't play means one reopen, then an error. AL| TOP CHANNEL (all four copies, even "SD") is 1080i sent as separate fields with no IDR frames: the emulator's software decoder freezes on it after one frame, Televizo on your phone fails the same way, and it plays on the stick.
 
 **Gate 3: the release build meets the performance budget on your stick.** Dropping the Appstore work (store assets, Amazon testing, review) shortens this phase.
 
@@ -222,11 +226,11 @@ The biggest risks are platform policy and shrinking reach, not code.
 - [x] Name and app ID: keeping "FireIPTV" / `com.fireiptv.player`, since this is personal use.
 - [x] Device: Fire TV Stick 4K (2nd gen), Fire OS 8.1, 5 GB free.
 - [ ] Your stick's IP address, once ADB debugging is on.
-- [ ] Repo hosting: done, private repo BurimKrz/FireIPTV. For in-app updates the app must read releases without a login. Recommended: a small public repo that holds only the release APKs, filled by the workflow; the code stays private. The alternatives are making this repo public, or putting a GitHub token in the app, which anyone with the APK could pull out.
+- [x] Repo hosting: BurimKrz/FireIPTV, made public on 2026-11-06 (history checked: no provider login in it).
 - [ ] Which legal test streams do we use for fixtures?
 - [ ] Stick reachable over adb for Gates 1–3: it sits behind a second router (192.168.10.x) while this PC is on the ISP router (192.168.0.x). Either connect the stick to the ISP router's Wi-Fi for the measurements, or forward port 5555 on the second router to the stick.
-- [ ] Where GitHub releases live, for in-app updates: a public releases-only repo (recommended), this repo public, or a token in the app.
+- [x] Where GitHub releases live: in this repo, now public.
 
-**Status at end of 2026-10-23:** phases 1–3 done, phase 4 steps 2–3 done (signed release APK). Waiting on the two open questions above. Pushed to GitHub up to the release build.
+**Status on 2026-11-06:** phases 1–3 done; phase 4 steps 2–3 and updates from GitHub done; 0.2.1 on your stick, updated through the app.
 
-**Next up:** the GitHub release workflow and in-app update check, once you choose where releases live (open question below). Gates 1–3 need the stick reachable over adb. Gate 1 (zap time on your Fire TV Stick) waits for the stick and this PC to be on the same network: the stick is on 192.168.10.x, the PC on 192.168.0.x.
+**Next up:** phase 4 step 4 (a week of daily use, fixing what comes up), then Gates 1–3 and the performance pass, which need the stick reachable over adb (open question above). Until then the player banner shows each zap time in ms, so Gate 1 can be read off the TV.
