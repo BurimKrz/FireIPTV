@@ -24,7 +24,10 @@ data class PlaylistSummary(
 data class GroupSetting(val id: Long, val title: String, val channelCount: Int, val hidden: Boolean)
 
 /** A group with its channel count, for the browse screen's groups column. */
-data class GroupSummary(val id: Long, val title: String, val channelCount: Int)
+data class GroupSummary(val id: Long, val title: String, val channelCount: Int, val pinnedAt: Long?)
+
+/** A pinned group's title, so a refresh (which recreates groups) can pin it again. */
+data class GroupPin(val title: String, val pinnedAt: Long)
 
 /** The columns the channel list shows, so paging doesn't load stream URLs and catch-up fields. */
 data class ChannelListItem(
@@ -106,13 +109,20 @@ interface PlaylistDao {
     @Query("UPDATE channel_group SET hidden = 1 WHERE playlistId = :playlistId AND title IN (:titles)")
     suspend fun hideGroups(playlistId: Long, titles: List<String>)
 
+    @Query("SELECT title, pinnedAt FROM channel_group WHERE playlistId = :playlistId AND pinnedAt IS NOT NULL")
+    suspend fun groupPins(playlistId: Long): List<GroupPin>
+
+    @Query("UPDATE channel_group SET pinnedAt = :pinnedAt WHERE playlistId = :playlistId AND title = :title")
+    suspend fun pinGroup(playlistId: Long, title: String, pinnedAt: Long)
+
     /**
      * Replaces [targetId]'s channels and groups with the staging playlist's, in one transaction.
-     * Groups the user hid stay hidden, matched by title.
+     * Groups the user hid stay hidden, and pinned ones pinned, matched by title.
      */
     @Transaction
     suspend fun swapStaging(stagingId: Long, targetId: Long) {
         val hidden = hiddenGroupTitles(targetId)
+        val pins = groupPins(targetId)
         deleteChannels(targetId)
         deleteGroups(targetId)
         moveGroups(stagingId, targetId)
@@ -120,6 +130,7 @@ interface PlaylistDao {
         delete(stagingId)
         // Old Android caps a query at 999 arguments.
         hidden.chunked(500).forEach { hideGroups(targetId, it) }
+        pins.forEach { pinGroup(targetId, it.title, it.pinnedAt) }
     }
 }
 
@@ -134,7 +145,7 @@ interface GroupDao {
 
     @Query(
         """
-        SELECT g.id, g.title, (SELECT COUNT(*) FROM channel c WHERE c.groupId = g.id) AS channelCount
+        SELECT g.id, g.title, (SELECT COUNT(*) FROM channel c WHERE c.groupId = g.id) AS channelCount, g.pinnedAt
         FROM channel_group g
         WHERE g.playlistId = :playlistId AND g.hidden = 0
         ORDER BY g.sortOrder
@@ -161,6 +172,9 @@ interface GroupDao {
 
     @Query("UPDATE channel_group SET hidden = :hidden WHERE playlistId = :playlistId")
     suspend fun setAllHidden(playlistId: Long, hidden: Boolean)
+
+    @Query("UPDATE channel_group SET pinnedAt = :pinnedAt WHERE id = :id")
+    suspend fun setPinnedAt(id: Long, pinnedAt: Long?)
 }
 
 @Dao

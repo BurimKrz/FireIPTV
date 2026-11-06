@@ -4,6 +4,7 @@ import com.fireiptv.core.data.db.PlayerDatabase
 import com.fireiptv.core.data.db.PlaylistEntity
 import com.fireiptv.core.data.db.PlaylistSummary
 import com.fireiptv.core.data.di.ApplicationScope
+import com.fireiptv.core.log.AppLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -33,6 +34,7 @@ class PlaylistRepository @Inject constructor(
     db: PlayerDatabase,
     private val importer: PlaylistImporter,
     @param:ApplicationScope private val scope: CoroutineScope,
+    private val log: AppLog,
 ) {
     private val playlistDao = db.playlistDao()
     private val importLock = Mutex()
@@ -67,7 +69,9 @@ class PlaylistRepository @Inject constructor(
                 _importState.value = ImportState.Idle
                 throw e
             } catch (e: Exception) {
-                ImportState.Failed(playlistId, playlist.name, e.message ?: e.javaClass.simpleName)
+                val message = e.message ?: e.javaClass.simpleName
+                log.error("Refreshing ${playlist.name} failed: $message")
+                ImportState.Failed(playlistId, playlist.name, message)
             }
         }
     }

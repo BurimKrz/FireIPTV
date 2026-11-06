@@ -7,6 +7,7 @@ import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
+import com.fireiptv.core.log.AppLog
 import dagger.hilt.android.HiltAndroidApp
 import okhttp3.OkHttpClient
 import okio.Path.Companion.toOkioPath
@@ -16,6 +17,13 @@ import javax.inject.Inject
 class PlayerApp : Application(), SingletonImageLoader.Factory {
 
     @Inject lateinit var okHttpClient: OkHttpClient
+    @Inject lateinit var appLog: AppLog
+
+    override fun onCreate() {
+        super.onCreate()
+        // Crashes go to Settings → Log: without adb on the TV, nothing else would show them.
+        appLog.installCrashHandler()
+    }
 
     /**
      * Channel logos. Coil keeps a downloaded logo on disk and serves it from there without asking

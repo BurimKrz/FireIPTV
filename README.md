@@ -8,7 +8,7 @@ The build plan, phases and what's done so far: [docs/PLAN.md](docs/PLAN.md).
 
 ## Status
 
-Version 0.2.1, in daily use on the stick.
+Version 0.3.0.
 
 | Works now | Left out on purpose |
 | --- | --- |
@@ -18,6 +18,9 @@ Version 0.2.1, in daily use on the stick.
 | Home: groups + channel list, D-pad navigation | Parental PIN (hide groups instead) |
 | Full-screen live TV (MPEG-TS and HLS), zapping with Up/Down | |
 | Sound in MP2 too (most Albanian channels), through a small FFmpeg decoder | |
+| Your own categories, and pinning any category to the top | |
+| Channel list at the side while watching (Left/Right) | |
+| Crash and error log, readable on the TV (Settings → Log) | |
 | Favourites and recently watched, kept across refreshes | |
 | Search by channel name, on the TV (no network) | |
 | Settings: hide groups, channel start Fast/Stable | |
@@ -127,11 +130,16 @@ The app opens on the add screen with the URL filled in and the **Import** button
 | Up / Down in the groups column | Moves through All channels, Favourites, Recently watched and the groups; resting on one for a moment shows its channels |
 | OK on a group | Jumps into its channel list |
 | OK on a channel | Plays it full screen |
-| Long-press OK, or Menu (☰), on a channel | Adds it to Favourites, or removes it (★ marks favourites) |
+| Menu (☰) on a channel | Adds it to Favourites, or removes it (★ marks favourites) |
+| Long-press OK on a channel | Opens a menu: Favourites, a ✓ for each of your own categories, and **New category…** to make one with this channel in it |
+| Menu (☰) on a group or category | Pins it to the top (★), under Recently watched, or unpins it |
+| Long-press OK on a group or category | Pin or unpin; for your own categories also Rename and Delete (press twice) |
 | Left from the channel list | Back to the group you came from |
 | **Search** button (top right) | Search channel names as you type; case and accents don't matter ("kosove" finds "KOSOVË") |
-| **Settings** button (top right) | Playlists (refresh, delete, add), Account (status, expiry, connections), Groups (hide the ones you never watch), Channel start (Fast or Stable), Channel logos (On or Off), Updates |
+| **Settings** button (top right) | Playlists (refresh, delete, add), Account (status, expiry, connections), Groups (hide the ones you never watch), Channel start (Fast or Stable), Channel logos (On or Off), Updates, Log |
 | Back on home | Leaves the app |
+
+The groups column lists All channels, Favourites and Recently watched, then pinned groups and categories, then your own categories, then the provider's groups. Your categories, like favourites, follow a channel through a refresh. "Refreshed N days ago" next to the playlist name says how old the list is; it only refreshes when you press Refresh in Settings → Playlists.
 
 **Search**
 
@@ -140,7 +148,8 @@ The app opens on the add screen with the URL filled in and the **Import** button
 | Type on the on-screen keyboard | Results update as you type; each shows its group |
 | Back (closes the keyboard), then Down | Moves into the results |
 | OK on a result | Plays it; Up/Down then zaps through its group |
-| Long-press OK, or Menu (☰) | Adds it to Favourites, or removes it |
+| Menu (☰) | Adds it to Favourites, or removes it |
+| Long-press OK | The same menu as on home: Favourites and your categories |
 
 **Watching**
 
@@ -149,10 +158,11 @@ The app opens on the add screen with the URL filled in and the **Import** button
 | Down / Up (or CH+ / CH-) | Next / previous channel in the list you opened it from (a channel opened from Recently watched zaps through its group); the banner moves at once, the stream switches when you stop pressing |
 | OK | Shows or hides the channel banner; on an error, tries again |
 | Menu (☰) | Adds the channel to Favourites, or removes it |
+| Left or Right | Opens the list you're watching from at the side, on the current channel: Up/Down move through it, OK plays one, Left/Right or Back closes it |
 | Play/Pause | Stops the stream (no data used) / starts it again |
 | Back | Returns to the list, on the channel you were watching |
 
-If the internet drops, the player shows "No internet connection" and starts the channel again by itself when it's back. If the provider refuses a channel, the message says why (account expired, or all connections in use). A channel that freezes is reopened by itself; if that doesn't help, the player says so instead of spinning.
+If the internet drops, the player shows "No internet connection" and starts the channel again by itself when it's back. If the provider refuses a channel, the message says why (account expired, or all connections in use). A channel that freezes is reopened by itself; if that doesn't help, the player says so instead of spinning. Crashes, failed channels and automatic retries are listed under Settings → Log (the newest 100, links hidden).
 
 Refresh only runs when you press it. Nothing updates in the background, and the stream closes as soon as you leave the player or press Home. Each channel logo downloads once (about 25 KB) and is kept in a 50 MB cache; logos for rows you scroll past are not fetched, and turning logos off in Settings stops all logo downloads.
 
@@ -205,6 +215,7 @@ A public test playlist (about 11,000 channels): `https://iptv-org.github.io/iptv
 | `:core:parser` | Streaming M3U parser |
 | `:core:player` | `PlayerManager`: ExoPlayer, stream type picking, retries, stall watchdog, zap timing |
 | `:core:ffmpeg` | FFmpeg audio decoder for MP2 (media3 sources + prebuilt native library) |
+| `:core:log` | `AppLog`: crashes, player errors and retries kept on the device for Settings → Log |
 | `:core:ui` | TV theme |
 | `tools/` | `build-ffmpeg.sh` |
 | `.github/workflows/` | `ci.yml` (dev and pull requests), `release.yml` (version tags) |

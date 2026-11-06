@@ -10,6 +10,8 @@ import com.fireiptv.core.data.settings.SettingsRepository
 import com.fireiptv.core.data.settings.StartMode
 import com.fireiptv.core.data.update.UpdateRepository
 import com.fireiptv.core.data.update.UpdateState
+import com.fireiptv.core.log.AppLog
+import com.fireiptv.core.log.LogEntry
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,7 +44,10 @@ class SettingsViewModel @Inject constructor(
     accountRepository: AccountRepository,
     private val settings: SettingsRepository,
     private val updates: UpdateRepository,
+    appLog: AppLog,
 ) : ViewModel() {
+
+    val log: StateFlow<List<LogEntry>> = appLog.entries
 
     val update: StateFlow<UpdateState> = updates.state
     val installedVersion: String = updates.installedVersion

@@ -184,12 +184,11 @@ Phase 0 is mostly done today; the task lists below track what remains in each ph
 
 **Ideas for after the test week** (not decided; each costs no extra network unless noted):
 
-- [ ] Crash and error log in Settings: the last few crashes and player errors, readable on the TV. Without adb on the stick, a crash during the test week is otherwise invisible.
-- [ ] Previous channel: one button (Left or Right while watching) jumps back to the last channel, for switching between two.
-- [ ] Audio track choice for channels that carry more than one language.
-- [ ] Picture size for channels sent in the wrong shape (4:3 stretched): fit, fill, zoom.
-- [ ] Start on the last watched channel when the app opens (a setting, off by default).
-- [ ] "Refreshed N days ago" next to the playlist, so a stale list is noticed; still refreshed only on OK.
+- [x] Crash and error log in Settings (0.3.0): crashes with their stack, failed channels and automatic retries, the newest 100, links masked. `:core:log`.
+- [x] Instead of previous channel (0.3.0): Left or Right while watching opens the list being zapped at the side, on the current channel; OK plays another at once.
+- [x] Added on request (0.3.0): your own categories (long-press OK on a channel → ✓ categories, New category…), kept across refreshes by stream URL like favourites; any group or category can be pinned (Menu ☰) and pinned ones sit under Recently watched. Database v6, auto-migrated; 5 new instrumented tests.
+- [ ] Not wanted for now (2026-11-06): audio track choice, picture size, start on the last channel.
+- [x] "Refreshed N days ago" next to the playlist name on home (0.3.0).
 - [ ] Lint in CI, once the existing warnings are cleared.
 
 **Gate 3: the release build meets the performance budget on your stick.** Dropping the Appstore work (store assets, Amazon testing, review) shortens this phase.

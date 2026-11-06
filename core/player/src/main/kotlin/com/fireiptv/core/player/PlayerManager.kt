@@ -25,6 +25,7 @@ import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
+import com.fireiptv.core.log.AppLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -84,6 +85,7 @@ class PlayerManager @Inject constructor(
     @ApplicationContext context: Context,
     private val client: OkHttpClient,
     private val buffer: BufferSettings,
+    private val log: AppLog,
 ) {
     val player: ExoPlayer = ExoPlayer.Builder(context)
         .setLoadControl(
@@ -249,6 +251,7 @@ class PlayerManager @Inject constructor(
                     stuck && !stuckReopened -> {
                         stuckReopened = true
                         Log.w(TAG, "${stream.label} has $now ms buffered but doesn't play, reopening")
+                        log.retry("${stream.label}: the picture stopped although the stream kept arriving; reopened")
                     }
                     stuck -> {
                         fail("The stream keeps arriving but the picture doesn't move. This channel's video may not play on this device.")
@@ -262,6 +265,7 @@ class PlayerManager @Inject constructor(
                     retries < RETRY_DELAYS_MS.size -> {
                         retries++
                         Log.w(TAG, "no data from ${stream.label} after $STALL_TIMEOUT_MS ms, reopening")
+                        log.retry("${stream.label}: no data for ${STALL_TIMEOUT_MS / 1000} s; reopened")
                     }
                     else -> {
                         fail("The provider stopped sending this channel.")
@@ -283,6 +287,7 @@ class PlayerManager @Inject constructor(
 
     private fun fail(message: String, httpCode: Int? = null) {
         zapStartedAt = 0L
+        log.error("${current?.label}: $message")
         // Closes the connection if it's still open: a one-connection account needs it for the next channel.
         player.stop()
         _status.value = PlaybackStatus.Failed(message, httpCode)
@@ -325,6 +330,7 @@ class PlayerManager @Inject constructor(
             }
             error.isRetryable() && retries < RETRY_DELAYS_MS.size -> {
                 val wait = RETRY_DELAYS_MS[retries++]
+                log.retry("${stream.label}: ${error.errorCodeName}${httpCode?.let { " (HTTP $it)" }.orEmpty()}; trying again")
                 _status.value = PlaybackStatus.Loading
                 retryJob = scope.launch {
                     delay(wait)

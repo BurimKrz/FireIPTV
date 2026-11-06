@@ -38,6 +38,8 @@ data class GroupEntity(
     val title: String,
     val sortOrder: Int,
     val hidden: Boolean = false,
+    /** Epoch millis when pinned to the top of home, or null. Kept across refreshes by title, like [hidden]. */
+    val pinnedAt: Long? = null,
 )
 
 @Entity(
@@ -113,4 +115,34 @@ data class RecentEntity(
     val streamUrl: String,
     val name: String,
     val watchedAt: Long,
+)
+
+/** A category the user made. Its channels are [UserListEntryEntity] rows. */
+@Entity(
+    tableName = "user_list",
+    foreignKeys = [ForeignKey(PlaylistEntity::class, ["id"], ["playlistId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("playlistId")],
+)
+data class UserListEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val playlistId: Long,
+    val title: String,
+    val createdAt: Long,
+    /** Epoch millis when pinned to the top of home, or null. */
+    val pinnedAt: Long? = null,
+)
+
+/** A channel in a user's category, keyed by stream URL like [FavoriteEntity] so it survives a refresh. */
+@Entity(
+    tableName = "user_list_entry",
+    primaryKeys = ["listId", "streamUrl"],
+    foreignKeys = [ForeignKey(UserListEntity::class, ["id"], ["listId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("listId", "sortOrder")],
+)
+data class UserListEntryEntity(
+    val listId: Long,
+    val streamUrl: String,
+    val name: String,
+    /** Epoch millis when added; a category lists its channels in the order they were added. */
+    val sortOrder: Long,
 )

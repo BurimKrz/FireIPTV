@@ -8,6 +8,7 @@ import com.fireiptv.core.data.account.AccountResult
 import com.fireiptv.core.data.db.ChannelEntity
 import com.fireiptv.core.data.db.PlayerDatabase
 import com.fireiptv.core.data.db.PlaylistEntity
+import com.fireiptv.core.log.AppLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -178,7 +179,7 @@ class XtreamImportTest {
         addPlaylist()
         val repository = AccountRepository(
             db,
-            PlaylistRepository(db, importer, CoroutineScope(Dispatchers.Unconfined)),
+            PlaylistRepository(db, importer, CoroutineScope(Dispatchers.Unconfined), AppLog(ApplicationProvider.getApplicationContext())),
             OkHttpClient(),
         )
 

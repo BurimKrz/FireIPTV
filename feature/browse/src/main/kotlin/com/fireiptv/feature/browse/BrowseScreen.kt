@@ -50,6 +50,8 @@ import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.playlist.ImportState
+import com.fireiptv.feature.browse.options.ChannelOptionsDialog
+import com.fireiptv.feature.browse.options.GroupOptionsDialog
 import com.fireiptv.core.ui.ChannelLogo
 import com.fireiptv.core.ui.rememberScrollIdle
 import kotlinx.coroutines.delay
@@ -72,6 +74,9 @@ fun BrowseScreen(
     // Coming back from the player, focus goes to the channel last watched; otherwise to the groups.
     var returnTarget by remember { mutableStateOf<ReturnTarget?>(null) }
     var focusGroups by remember { mutableStateOf(false) }
+    // Long-press menus: one for a channel, one for a group or category.
+    var channelOptions by remember { mutableStateOf<Long?>(null) }
+    var groupOptions by remember { mutableStateOf<GroupRow?>(null) }
     LaunchedEffect(Unit) {
         returnTarget = viewModel.takeReturnTarget()
         focusGroups = returnTarget == null
@@ -89,15 +94,33 @@ fun BrowseScreen(
             state.loading -> Unit
             state.playlist == null -> NoPlaylist(onAddPlaylist)
             else -> Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.fillMaxSize()) {
-                GroupsColumn(state, focusOnStart = focusGroups, onSelect = viewModel::select)
+                GroupsColumn(
+                    state,
+                    focusOnStart = focusGroups,
+                    onSelect = viewModel::select,
+                    onTogglePinned = viewModel::togglePinned,
+                    onOptions = { groupOptions = it },
+                )
                 ChannelsColumn(
                     state,
                     channels,
                     returnTarget,
                     onPlayChannel = { channelId -> onPlayChannel(channelId, state.selectedList) },
                     onToggleFavorite = viewModel::toggleFavorite,
+                    onOptions = { channelOptions = it },
                 )
             }
+        }
+        channelOptions?.let { id -> ChannelOptionsDialog(channelId = id, onDismiss = { channelOptions = null }) }
+        groupOptions?.let { row ->
+            val listId = (row.list as? ChannelList.Custom)?.id
+            GroupOptionsDialog(
+                row = row,
+                onTogglePinned = { viewModel.togglePinned(row) },
+                onRename = { title -> listId?.let { viewModel.renameList(it, title) } },
+                onDelete = { listId?.let(viewModel::deleteList) },
+                onDismiss = { groupOptions = null },
+            )
         }
     }
 }
@@ -106,6 +129,19 @@ fun BrowseScreen(
 private fun Header(state: BrowseUiState, updateAvailable: Boolean, onOpenSettings: () -> Unit, onOpenSearch: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(state.playlist?.name ?: "FireIPTV", style = MaterialTheme.typography.headlineSmall, maxLines = 1)
+        // Refresh only runs on request, so say how old the list is.
+        state.playlist?.lastSync?.let { synced ->
+            val days = ((System.currentTimeMillis() - synced) / DAY_MS).toLong().coerceAtLeast(0)
+            Text(
+                when (days) {
+                    0L -> "Refreshed today"
+                    1L -> "Refreshed yesterday"
+                    else -> "Refreshed $days days ago"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
         // From the expiry saved at the last refresh: no request just to show this.
         state.playlist?.accountExpiresAt?.let { expiresAt ->
             val days = ceil((TimeUnit.SECONDS.toMillis(expiresAt) - System.currentTimeMillis()) / DAY_MS).toLong()
@@ -151,7 +187,13 @@ private fun NoPlaylist(onAddPlaylist: () -> Unit) {
 }
 
 @Composable
-private fun GroupsColumn(state: BrowseUiState, focusOnStart: Boolean, onSelect: (ChannelList) -> Unit) {
+private fun GroupsColumn(
+    state: BrowseUiState,
+    focusOnStart: Boolean,
+    onSelect: (ChannelList) -> Unit,
+    onTogglePinned: (GroupRow) -> Unit,
+    onOptions: (GroupRow) -> Unit,
+) {
     val focusManager = LocalFocusManager.current
     val firstGroup = remember { FocusRequester() }
     LaunchedEffect(focusOnStart) { if (focusOnStart) firstGroup.requestFocus() }
@@ -178,11 +220,27 @@ private fun GroupsColumn(state: BrowseUiState, focusOnStart: Boolean, onSelect: 
                     onSelect(group.list)
                     focusManager.moveFocus(FocusDirection.Right)
                 },
-                headlineContent = { Text(group.title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                // Long-press OK: pin, and rename or delete the user's own; Menu (☰) pins at once.
+                onLongClick = if (group.pinnable) {
+                    { onOptions(group) }
+                } else {
+                    null
+                },
+                headlineContent = {
+                    Text(if (group.pinned) "★ ${group.title}" else group.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
                 trailingContent = { Text("%,d".format(group.channelCount)) },
                 modifier = Modifier
                     .then(if (group.list == ChannelList.All) Modifier.focusRequester(firstGroup) else Modifier)
-                    .onFocusChanged { if (it.isFocused) focusedGroup = group.list },
+                    .onFocusChanged { if (it.isFocused) focusedGroup = group.list }
+                    .onKeyEvent { event ->
+                        if (group.pinnable && event.type == KeyEventType.KeyDown && event.key == Key.Menu) {
+                            onTogglePinned(group)
+                            true
+                        } else {
+                            false
+                        }
+                    },
             )
         }
     }
@@ -195,6 +253,7 @@ private fun ChannelsColumn(
     returnTarget: ReturnTarget?,
     onPlayChannel: (Long) -> Unit,
     onToggleFavorite: (Long) -> Unit,
+    onOptions: (Long) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
         val group = state.selectedGroup
@@ -215,6 +274,8 @@ private fun ChannelsColumn(
                 state.selectedList == ChannelList.Favorites ->
                     "No favourites yet. Long-press OK on a channel, or press Menu (☰), to add it."
                 state.selectedList == ChannelList.Recents -> "Channels you watch will appear here."
+                state.selectedList is ChannelList.Custom ->
+                    "No channels yet. Long-press OK on any channel and pick this category to add it."
                 else -> "No channels in this group."
             }
             Text(
@@ -259,6 +320,7 @@ private fun ChannelsColumn(
                         channel,
                         onClick = { onPlayChannel(channel.id) },
                         onToggleFavorite = { onToggleFavorite(channel.id) },
+                        onOptions = { onOptions(channel.id) },
                         logosMayDownload = listIdle,
                         modifier = if (channel.id == returnTarget?.channelId) Modifier.focusRequester(returnFocus) else Modifier,
                     )
@@ -273,14 +335,15 @@ private fun ChannelItem(
     channel: ChannelRow,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onOptions: () -> Unit,
     logosMayDownload: Boolean,
     modifier: Modifier = Modifier,
 ) {
     DenseListItem(
         selected = false,
         onClick = onClick,
-        // Long-press OK or the remote's Menu (☰) button adds or removes a favourite.
-        onLongClick = onToggleFavorite,
+        // Long-press OK opens favourite and category choices; Menu (☰) toggles the favourite at once.
+        onLongClick = onOptions,
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

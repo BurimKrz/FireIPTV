@@ -49,11 +49,12 @@ import com.fireiptv.core.ui.ChannelLogo
 import com.fireiptv.core.ui.LocalLogosEnabled
 import com.fireiptv.core.ui.rememberScrollIdle
 import com.fireiptv.core.ui.verticalDpadMovesFocus
+import com.fireiptv.feature.browse.options.ChannelOptionsDialog
 import androidx.compose.material3.Text as FieldText
 
 /**
  * Search by channel name. Results follow the typing; OK plays one (Up/Down then zaps its group),
- * long-press OK or Menu (☰) toggles a favourite.
+ * long-press OK opens favourite and category choices, Menu (☰) toggles a favourite.
  */
 @Composable
 fun SearchScreen(
@@ -66,6 +67,7 @@ fun SearchScreen(
     val returnFocus = remember { FocusRequester() }
     val listState = rememberLazyListState()
     val listIdle by rememberScrollIdle(listState)
+    var channelOptions by remember { mutableStateOf<Long?>(null) }
 
     // Back from the player: focus the channel that was playing. Otherwise: the search field.
     var returnTo by remember { mutableStateOf<Long?>(null) }
@@ -142,12 +144,14 @@ fun SearchScreen(
                     result,
                     onClick = { onPlayChannel(result.id, result.zapList) },
                     onToggleFavorite = { viewModel.toggleFavorite(result.id) },
+                    onOptions = { channelOptions = result.id },
                     logosMayDownload = listIdle,
                     modifier = if (result.id == returnTo) Modifier.focusRequester(returnFocus) else Modifier,
                 )
             }
         }
     }
+    channelOptions?.let { id -> ChannelOptionsDialog(channelId = id, onDismiss = { channelOptions = null }) }
 }
 
 @Composable
@@ -155,6 +159,7 @@ private fun ResultItem(
     result: SearchResult,
     onClick: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onOptions: () -> Unit,
     logosMayDownload: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -163,7 +168,7 @@ private fun ResultItem(
     DenseListItem(
         selected = false,
         onClick = onClick,
-        onLongClick = onToggleFavorite,
+        onLongClick = onOptions,
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

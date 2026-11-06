@@ -29,6 +29,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.settings.StartMode
 import com.fireiptv.core.data.update.UpdateState
+import com.fireiptv.feature.settings.log.summary
 import java.text.DateFormat
 import java.util.Date
 
@@ -37,11 +38,13 @@ fun SettingsScreen(
     onOpenPlaylists: () -> Unit,
     onOpenGroups: () -> Unit,
     onOpenAccount: () -> Unit,
+    onOpenLog: () -> Unit,
     appVersion: String,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
+    val log by viewModel.log.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var installError by remember { mutableStateOf<String?>(null) }
     // Back from Playlists, Account or Groups lands on the row that opened it, not on the first row.
@@ -130,6 +133,12 @@ fun SettingsScreen(
             },
             modifier = rowModifier.focusRequester(rows[ROW_UPDATES]),
         )
+        SettingRow(
+            title = "Log",
+            detail = if (log.isEmpty()) "Crashes and channel errors are kept here. Nothing recorded." else "${summary(log)}. OK to read.",
+            onClick = { open(ROW_LOG, onOpenLog) },
+            modifier = rowModifier.focusRequester(rows[ROW_LOG]),
+        )
         Text(
             "FireIPTV $appVersion",
             style = MaterialTheme.typography.bodySmall,
@@ -175,4 +184,5 @@ private const val ROW_GROUPS = 2
 private const val ROW_START = 3
 private const val ROW_LOGOS = 4
 private const val ROW_UPDATES = 5
-private const val ROW_COUNT = 6
+private const val ROW_LOG = 6
+private const val ROW_COUNT = 7
