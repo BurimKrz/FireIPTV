@@ -42,12 +42,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.DenseListItem
-import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.channel.ChannelList
-import com.fireiptv.core.ui.FireColors
-import com.fireiptv.core.ui.LogoTile
+import com.fireiptv.core.ui.ChannelLogo
 import com.fireiptv.core.ui.LocalLogosEnabled
 import com.fireiptv.core.ui.rememberScrollIdle
 import com.fireiptv.core.ui.verticalDpadMovesFocus
@@ -165,8 +163,8 @@ private fun ResultItem(
     logosMayDownload: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // The group line sits under the name, past the number and (when shown) the logo tile.
-    val groupIndent = if (LocalLogosEnabled.current) 124.dp else 56.dp
+    // The group line sits under the name, past the number and (when shown) the logo.
+    val groupIndent = if (LocalLogosEnabled.current && !result.logoUrl.isNullOrBlank()) 136.dp else 72.dp
     DenseListItem(
         selected = false,
         onClick = onClick,
@@ -175,15 +173,13 @@ private fun ResultItem(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     result.number.toString(),
-                    color = LocalContentColor.current.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
-                    modifier = Modifier.width(56.dp),
+                    modifier = Modifier.width(72.dp),
                 )
-                LogoTile(
+                ChannelLogo(
                     result.logoUrl,
-                    result.name,
-                    Modifier.padding(end = 14.dp).size(width = 54.dp, height = 30.dp),
+                    Modifier.padding(end = 16.dp).size(width = 48.dp, height = 27.dp),
                     mayDownload = logosMayDownload,
                 )
                 Box(Modifier.weight(1f)) {
@@ -195,7 +191,7 @@ private fun ResultItem(
             { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = groupIndent)) }
         },
         trailingContent = if (result.favorite) {
-            { Text("★", color = FireColors.Accent) }
+            { Text("★") }
         } else {
             null
         },

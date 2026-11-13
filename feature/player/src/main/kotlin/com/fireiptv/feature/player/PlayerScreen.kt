@@ -50,13 +50,10 @@ import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import androidx.tv.material3.DenseListItem
-import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.fireiptv.core.player.PlaybackStatus
-import com.fireiptv.core.ui.FireColors
-import com.fireiptv.core.ui.LogoTile
-import com.fireiptv.core.ui.PanelShape
+import com.fireiptv.core.ui.ChannelLogo
 
 /**
  * Full-screen live TV. Up/Down zap through the list the channel was opened from (CH+/CH- too),
@@ -173,12 +170,12 @@ private fun Banner(channel: BannerChannel, lastZapMs: Long?) {
             .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))))
             .padding(horizontal = 48.dp, vertical = 27.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-            LogoTile(channel.logoUrl, channel.name, Modifier.size(width = 96.dp, height = 54.dp))
-            Text(channel.number.toString(), style = MaterialTheme.typography.displaySmall, color = FireColors.Accent)
+        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            Text(channel.number.toString(), style = MaterialTheme.typography.displaySmall, color = Color.White)
+            ChannelLogo(channel.logoUrl, Modifier.size(width = 96.dp, height = 54.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    if (channel.favorite) "${channel.name} ★" else channel.name,
+                    if (channel.favorite) "★ ${channel.name}" else channel.name,
                     style = MaterialTheme.typography.headlineSmall,
                     color = Color.White,
                     maxLines = 1,
@@ -226,7 +223,7 @@ private fun ChannelPanel(
         modifier = modifier
             .fillMaxHeight()
             .width(480.dp)
-            .background(FireColors.Background.copy(alpha = 0.92f))
+            .background(Color.Black.copy(alpha = 0.85f))
             .padding(horizontal = 16.dp, vertical = 24.dp),
     ) {
         Text(
@@ -248,25 +245,14 @@ private fun ChannelPanel(
                         onClick = { onPlay(channel.id) },
                         headlineContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(channel.number.toString(), maxLines = 1, modifier = Modifier.width(64.dp))
+                                ChannelLogo(channel.logoUrl, Modifier.padding(end = 12.dp).size(width = 48.dp, height = 27.dp))
                                 Text(
-                                    channel.number.toString(),
-                                    color = LocalContentColor.current.copy(alpha = 0.6f),
-                                    style = MaterialTheme.typography.labelMedium,
+                                    if (channel.favorite) "★ ${channel.name}" else channel.name,
                                     maxLines = 1,
-                                    modifier = Modifier.width(56.dp),
+                                    overflow = TextOverflow.Ellipsis,
                                 )
-                                LogoTile(
-                                    channel.logoUrl,
-                                    channel.name,
-                                    Modifier.padding(end = 14.dp).size(width = 54.dp, height = 30.dp),
-                                )
-                                Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                        },
-                        trailingContent = if (channel.favorite) {
-                            { Text("★", color = FireColors.Accent) }
-                        } else {
-                            null
                         },
                         modifier = if (channel.id == panel.currentId) Modifier.focusRequester(current) else Modifier,
                     )
@@ -282,8 +268,8 @@ private fun Message(title: String, body: String, modifier: Modifier = Modifier) 
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier
             .widthIn(max = 640.dp)
-            .background(FireColors.Panel.copy(alpha = 0.94f), PanelShape)
-            .padding(horizontal = 28.dp, vertical = 24.dp),
+            .background(Color.Black.copy(alpha = 0.75f), MaterialTheme.shapes.medium)
+            .padding(24.dp),
     ) {
         Text(title, style = MaterialTheme.typography.titleLarge, color = Color.White)
         Text(body, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.8f))

@@ -1,10 +1,7 @@
 package com.fireiptv.core.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -16,12 +13,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.unit.dp
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
@@ -97,20 +90,3 @@ fun rememberScrollIdle(state: LazyListState, idleMs: Long = 400): State<Boolean>
 }
 
 private const val SETTLE_MS = 300L
-
-/**
- * A channel's logo on a small dark tile, so logos of any shape line up in a list and a channel
- * without one still gets its initial. Renders nothing when logos are off.
- */
-@Composable
-fun LogoTile(url: String?, name: String, modifier: Modifier = Modifier, mayDownload: Boolean = true) {
-    if (!LocalLogosEnabled.current) return
-    Box(modifier.background(FireColors.Tile, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
-        if (url.isNullOrBlank()) {
-            val initial = name.firstOrNull { it.isLetterOrDigit() }?.uppercase().orEmpty()
-            Text(initial, color = FireColors.TextMuted, style = MaterialTheme.typography.labelMedium)
-        } else {
-            ChannelLogo(url, Modifier.fillMaxSize().padding(3.dp), mayDownload)
-        }
-    }
-}
