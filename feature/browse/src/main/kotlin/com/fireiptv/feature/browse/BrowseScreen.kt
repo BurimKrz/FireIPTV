@@ -41,7 +41,11 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,12 +55,15 @@ import androidx.paging.compose.collectAsLazyPagingItems
 import androidx.paging.compose.itemKey
 import androidx.tv.material3.Button
 import androidx.tv.material3.DenseListItem
+import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.playlist.ImportState
-import com.fireiptv.core.ui.ChannelLogo
+import com.fireiptv.core.ui.FireColors
+import com.fireiptv.core.ui.LogoTile
+import com.fireiptv.core.ui.panel
 import com.fireiptv.core.ui.rememberScrollIdle
 import com.fireiptv.feature.browse.options.ChannelOptionsDialog
 import com.fireiptv.feature.browse.options.GroupOptionsDialog
@@ -114,7 +121,7 @@ fun BrowseScreen(
         when {
             state.loading -> Unit
             state.playlist == null -> NoPlaylist(onAddPlaylist)
-            else -> Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.fillMaxSize()) {
+            else -> Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.fillMaxSize()) {
                 GroupsColumn(
                     state,
                     focusOnStart = focusGroups,
@@ -149,16 +156,35 @@ fun BrowseScreen(
 @Composable
 private fun Header(state: BrowseUiState, updateAvailable: Boolean, onOpenSettings: () -> Unit, onOpenSearch: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text(state.playlist?.name ?: "FireIPTV", style = MaterialTheme.typography.headlineSmall, maxLines = 1)
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = FireColors.Accent)) { append("Fire") }
+                append("IPTV")
+            },
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
+        state.playlist?.name?.let { name ->
+            Text(
+                name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+        }
         // Refresh only runs on request, so say how old the list is.
         state.playlist?.lastSync?.let { synced ->
             val days = ((System.currentTimeMillis() - synced) / DAY_MS).toLong().coerceAtLeast(0)
             Text(
                 when (days) {
-                    0L -> "Refreshed today"
-                    1L -> "Refreshed yesterday"
-                    else -> "Refreshed $days days ago"
+                    0L -> "· Refreshed today"
+                    1L -> "· Refreshed yesterday"
+                    else -> "· Refreshed $days days ago"
                 },
+                maxLines = 1,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -228,10 +254,11 @@ private fun GroupsColumn(
     }
 
     LazyColumn(
-        contentPadding = PaddingValues(vertical = 8.dp),
+        contentPadding = PaddingValues(8.dp),
         modifier = Modifier
-            .width(320.dp)
+            .width(304.dp)
             .fillMaxHeight()
+            .panel()
             .focusRestorer(),
     ) {
         items(state.groups, key = { it.list.encode() }) { group ->
@@ -248,9 +275,22 @@ private fun GroupsColumn(
                     null
                 },
                 headlineContent = {
-                    Text(if (group.pinned) "★ ${group.title}" else group.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        buildAnnotatedString {
+                            if (group.pinned) withStyle(SpanStyle(color = FireColors.Accent)) { append("★ ") }
+                            append(group.title)
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 },
-                trailingContent = { Text("%,d".format(group.channelCount)) },
+                trailingContent = {
+                    Text(
+                        "%,d".format(group.channelCount),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = LocalContentColor.current.copy(alpha = 0.6f),
+                    )
+                },
                 modifier = Modifier
                     .then(if (group.list == ChannelList.All) Modifier.focusRequester(firstGroup) else Modifier)
                     .onFocusChanged { if (it.isFocused) focusedGroup = group.list }
@@ -276,15 +316,29 @@ private fun ChannelsColumn(
     onToggleFavorite: (Long) -> Unit,
     onOptions: (Long) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().panel().padding(8.dp)) {
         val group = state.selectedGroup
-        Text(
-            group?.let { "${it.title} · ${"%,d".format(it.channelCount)}" }.orEmpty(),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp),
+        ) {
+            Text(
+                group?.title.orEmpty(),
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            group?.let {
+                Text(
+                    if (it.channelCount == 1) "1 channel" else "${"%,d".format(it.channelCount)} channels",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                )
+            }
+        }
 
         if (channels.itemCount == 0) {
             val import = state.importState
@@ -302,7 +356,7 @@ private fun ChannelsColumn(
             Text(
                 message,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             )
             return@Column
         }
@@ -326,7 +380,8 @@ private fun ChannelsColumn(
         }
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(vertical = 8.dp),
+            // Room at the sides for the focused row, which grows a little.
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
             modifier = Modifier
                 .fillMaxSize()
                 .focusRestorer(),
@@ -369,13 +424,16 @@ private fun ChannelItem(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     channel.number.toString(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    // Follows the row's own text colour, so it stays readable on the focused row.
+                    color = LocalContentColor.current.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.labelMedium,
                     maxLines = 1,
-                    modifier = Modifier.width(72.dp),
+                    modifier = Modifier.width(56.dp),
                 )
-                ChannelLogo(
+                LogoTile(
                     channel.logoUrl,
-                    Modifier.padding(end = 16.dp).size(width = 48.dp, height = 27.dp),
+                    channel.name,
+                    Modifier.padding(end = 14.dp).size(width = 54.dp, height = 30.dp),
                     mayDownload = logosMayDownload,
                 )
                 Box(Modifier.weight(1f)) {
@@ -384,7 +442,7 @@ private fun ChannelItem(
             }
         },
         trailingContent = if (channel.favorite) {
-            { Text("★") }
+            { Text("★", color = FireColors.Accent) }
         } else {
             null
         },

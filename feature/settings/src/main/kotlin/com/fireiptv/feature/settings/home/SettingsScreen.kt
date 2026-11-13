@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.ListItem
+import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.settings.StartMode
@@ -174,6 +175,7 @@ private fun SettingRow(title: String, detail: String, onClick: () -> Unit, modif
         onClick = onClick,
         headlineContent = { Text(title) },
         supportingContent = { Text(detail) },
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = modifier,
     )
 }
