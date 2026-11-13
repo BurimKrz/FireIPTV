@@ -8,6 +8,7 @@ import com.fireiptv.core.log.AppLog
 import okhttp3.OkHttpClient
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okio.Buffer
 import org.junit.After
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -55,5 +56,27 @@ class PlayerManagerTest {
         assertNotNull("stalled stream was not reopened", server.takeRequest(12, TimeUnit.SECONDS))
         val waitedMs = (System.nanoTime() - started) / 1_000_000
         assertTrue("reopened after $waitedMs ms", waitedMs in 6_000..10_000)
+    }
+
+    @Test
+    fun streamTheProviderClosesIsReopened() {
+        // Two seconds of sound, then the provider ends the response: a live channel should reopen.
+        repeat(2) { server.enqueue(MockResponse().setHeader("Content-Type", "audio/wav").setBody(silentWav(seconds = 2))) }
+        instrumentation.runOnMainSync {
+            manager.play(StreamRequest(url = server.url("/live/2.ts").toString(), label = "test"))
+        }
+
+        assertNotNull("first request", server.takeRequest(5, TimeUnit.SECONDS))
+        assertNotNull("ended stream was not reopened", server.takeRequest(10, TimeUnit.SECONDS))
+    }
+
+    private fun silentWav(seconds: Int): Buffer {
+        val rate = 8_000
+        val dataSize = rate * 2 * seconds
+        return Buffer()
+            .writeUtf8("RIFF").writeIntLe(36 + dataSize).writeUtf8("WAVE")
+            .writeUtf8("fmt ").writeIntLe(16).writeShortLe(1).writeShortLe(1)
+            .writeIntLe(rate).writeIntLe(rate * 2).writeShortLe(2).writeShortLe(16)
+            .writeUtf8("data").writeIntLe(dataSize).write(ByteArray(dataSize))
     }
 }
