@@ -1,6 +1,6 @@
 # FireIPTV — Plan
 
-Updated Nov 13, 2026 · @Burim
+Updated Nov 14, 2026 · @Burim
 
 > This file is the working plan. The older [plan doc](https://claude.ai/artifact/Fq1h3cLnd4iF97zX1tu5Ye) holds the full history of phases 0–4.
 
@@ -17,15 +17,15 @@ A native Kotlin live-TV player for one Fire TV Stick 4K (2nd gen, Fire OS 8.1 / 
 
 ## Where we are
 
-**On the stick: 0.3.0.** On `dev`, not released yet: the freeze fix.
+**On the stick: 0.3.0.** Release 0.3.1 (freeze fix) waits on [PR #3](https://github.com/BurimKrz/FireIPTV/pull/3). 0.4 is built and tested on the emulator; it goes to `dev` once #3 is merged, so the release stays the freeze fix only.
 
 | Area | Done |
 | --- | --- |
 | Playlists | M3U by URL, Xtream login (live only, about 0.7 MB per refresh instead of 400 MB), refresh on request, "Refreshed N days ago" |
 | Browse | Groups column + paged channel list (28,502 channels, 427 groups), Favourites, Recently watched (20), your own categories, pinned groups, search (accents ignored) |
-| Player | First frame in about 0.7 s (TS, emulator), Up/Down zap, side list on Left/Right, banner, MP2 audio via FFmpeg |
+| Player | First frame in about 0.7 s (TS, emulator), Up/Down zap, side list on Left/Right, banner with resolution and data rate, MP2 audio via FFmpeg, sleep timer on ⏩, "Still watching?" after 3 h |
 | Recovery | Errors retry 3× (1, 3, 6 s); offline waits and resumes by itself; stalls, provider-closed streams and frozen pictures reopen the channel (dev); account-aware refusal messages |
-| Settings | Playlists, Account, Groups (hide), Fast/Stable start, logos On/Off, Updates, Log |
+| Settings | Playlists, Account, Groups (hide), Fast/Stable start, logos On/Off, data used (today, this month), Updates, Log |
 | Updates | Tag `v<version>` on `main` → CI builds a signed APK → the app finds it (once a day, on open) |
 
 **Measured data use:** HD 1.1 GB/h, SD 0.68 GB/h, 2–3 MB extra per channel start, 0 while idle.
@@ -37,14 +37,15 @@ Each step is a release that goes to the stick through Settings → Updates. A st
 ### 0.3.1 — Freeze fix on the stick
 
 - [x] Reopen the channel when the provider ends the stream, when the picture stands still for 6 s while "playing", or when data only trickles in (shares the 3 retries)
-- [ ] Release 0.3.1 and watch real channels for a few days; the Log shows "the picture froze … reopened" when it kicks in
+- [ ] Release 0.3.1 ([PR #3](https://github.com/BurimKrz/FireIPTV/pull/3), then tag `v0.3.1`) and watch real channels for a few days; the Log shows "the picture froze … reopened" when it kicks in
 
 ### 0.4 — Use less data
 
-- [ ] **Still watching?** After 3 hours with no key press, ask once; stop the stream if nobody answers within a minute
-- [ ] **Sleep timer:** off / 30 / 60 / 90 min, chosen from the banner; the stream stops when it runs out
-- [ ] **Data counter** in Settings: today and this month, counted from the bytes the app receives (no extra requests)
-- [ ] **Stream info** on the banner: resolution and bitrate, e.g. "1080p · 6.2 Mb/s"
+- [x] **Still watching?** After 3 hours with no key press, ask once; stop the stream if nobody answers within a minute. Once stopped, the TV may dim and sleep
+- [x] **Sleep timer:** off / 30 / 60 / 90 min, stepped with Fast-forward (⏩) and shown on the banner; the stream stops when it runs out
+- [x] **Data counter** in Settings: today and this month, from the system's byte count for the app (no extra requests)
+- [x] **Stream info** on the banner: resolution and the rate data arrives at, e.g. "1080p · 8.3 Mb/s"
+- [ ] Release 0.4 once 0.3.1 is on the stick
 
 ### 0.5 — When channels fail
 
