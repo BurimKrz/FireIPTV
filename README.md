@@ -6,7 +6,7 @@ Built for personal use on a Fire TV Stick 4K (2nd gen, Fire OS 8.1) and installe
 
 ## Status
 
-Version 0.3.0.
+Version 0.4.0.
 
 | Works now | Left out on purpose |
 | --- | --- |
