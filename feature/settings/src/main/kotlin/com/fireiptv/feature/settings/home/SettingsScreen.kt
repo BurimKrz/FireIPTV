@@ -31,7 +31,10 @@ import com.fireiptv.core.data.settings.StartMode
 import com.fireiptv.core.data.update.UpdateState
 import com.fireiptv.feature.settings.log.summary
 import java.text.DateFormat
+import java.time.YearMonth
+import java.time.format.TextStyle
 import java.util.Date
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(
@@ -45,6 +48,7 @@ fun SettingsScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
     val log by viewModel.log.collectAsStateWithLifecycle()
+    val usage by viewModel.usage.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var installError by remember { mutableStateOf<String?>(null) }
     // Back from Playlists, Account or Groups lands on the row that opened it, not on the first row.
@@ -115,6 +119,13 @@ fun SettingsScreen(
             onClick = { open(ROW_LOGOS, viewModel::toggleLogos) },
             modifier = rowModifier.focusRequester(rows[ROW_LOGOS]),
         )
+        SettingRow(
+            title = "Data used: ${dataSize(usage.todayBytes)} today",
+            detail = "${dataSize(usage.monthBytes)} in ${YearMonth.now().month.getDisplayName(TextStyle.FULL, Locale.getDefault())}: " +
+                "everything the app downloaded, counted by the system with no extra requests.",
+            onClick = { open(ROW_DATA, viewModel::refreshUsage) },
+            modifier = rowModifier.focusRequester(rows[ROW_DATA]),
+        )
         val (updateTitle, updateDetail) = updateText(update, viewModel.installedVersion)
         SettingRow(
             title = updateTitle,
@@ -165,6 +176,10 @@ private fun checkedWhen(at: Long): String {
     return if (DateUtils.isToday(at)) "today at $time" else DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date(at)) + " at $time"
 }
 
+/** Megabytes under 1 GB, gigabytes from there; 1 GB = 1000 MB, as providers and ISPs count. */
+private fun dataSize(bytes: Long): String =
+    if (bytes < 1_000_000_000) "%d MB".format(bytes / 1_000_000) else "%.2f GB".format(bytes / 1e9)
+
 private fun megabytes(bytes: Long) = "%.1f MB".format(bytes / 1_048_576.0)
 
 @Composable
@@ -183,6 +198,7 @@ private const val ROW_ACCOUNT = 1
 private const val ROW_GROUPS = 2
 private const val ROW_START = 3
 private const val ROW_LOGOS = 4
-private const val ROW_UPDATES = 5
-private const val ROW_LOG = 6
-private const val ROW_COUNT = 7
+private const val ROW_DATA = 5
+private const val ROW_UPDATES = 6
+private const val ROW_LOG = 7
+private const val ROW_COUNT = 8

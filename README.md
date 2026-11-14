@@ -219,3 +219,5 @@ A public test playlist (about 11,000 channels): `https://iptv-org.github.io/iptv
 | `:core:ui` | TV theme |
 | `tools/` | `build-ffmpeg.sh` |
 | `.github/workflows/` | `ci.yml` (dev and pull requests), `release.yml` (version tags) |
+
+CI runs on every push to `dev`; tagged versions build the release APK.

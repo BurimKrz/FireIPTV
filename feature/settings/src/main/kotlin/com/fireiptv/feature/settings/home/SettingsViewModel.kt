@@ -10,6 +10,8 @@ import com.fireiptv.core.data.settings.SettingsRepository
 import com.fireiptv.core.data.settings.StartMode
 import com.fireiptv.core.data.update.UpdateRepository
 import com.fireiptv.core.data.update.UpdateState
+import com.fireiptv.core.data.usage.DataUsage
+import com.fireiptv.core.data.usage.DataUsageRepository
 import com.fireiptv.core.log.AppLog
 import com.fireiptv.core.log.LogEntry
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -44,8 +46,11 @@ class SettingsViewModel @Inject constructor(
     accountRepository: AccountRepository,
     private val settings: SettingsRepository,
     private val updates: UpdateRepository,
+    private val dataUsage: DataUsageRepository,
     appLog: AppLog,
 ) : ViewModel() {
+
+    val usage: StateFlow<DataUsage> = dataUsage.usage
 
     val log: StateFlow<List<LogEntry>> = appLog.entries
 
@@ -75,6 +80,11 @@ class SettingsViewModel @Inject constructor(
                 hasAccount = hasAccount,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
+
+    /** OK on the data row counts what arrived since the last sample, so the numbers are current. */
+    fun refreshUsage() {
+        viewModelScope.launch { dataUsage.sample() }
+    }
 
     fun toggleLogos() {
         viewModelScope.launch { settings.setLogosEnabled(!settings.logosEnabled.value) }

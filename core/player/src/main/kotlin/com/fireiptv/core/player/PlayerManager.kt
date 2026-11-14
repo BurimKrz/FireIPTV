@@ -131,6 +131,7 @@ class PlayerManager @Inject constructor(
     private var stuckReopened = false
     private var retryJob: Job? = null
     private var stallJob: Job? = null
+    private var freezeJob: Job? = null
     private var steadyJob: Job? = null
     private var zapStartedAt = 0L
 
@@ -147,6 +148,7 @@ class PlayerManager @Inject constructor(
                     when (state) {
                         Player.STATE_BUFFERING -> {
                             steadyJob?.cancel()
+                            freezeJob?.cancel()
                             if (_status.value !is PlaybackStatus.Failed) _status.value = PlaybackStatus.Loading
                             // A stall after playback started gets the same watchdog as the first start.
                             if (stallJob?.isActive != true) watchStall()
@@ -161,8 +163,18 @@ class PlayerManager @Inject constructor(
                                 delay(STEADY_MS)
                                 retries = 0
                             }
+                            watchFreeze()
                         }
-                        else -> Unit
+                        // A live channel has no end: the provider closed the stream, so open it again.
+                        Player.STATE_ENDED -> {
+                            freezeJob?.cancel()
+                            steadyJob?.cancel()
+                            val status = _status.value
+                            if (status == PlaybackStatus.Playing || status == PlaybackStatus.Loading) {
+                                reopenOrFail("the provider closed the stream", "The provider stopped sending this channel.")
+                            }
+                        }
+                        else -> freezeJob?.cancel()
                     }
                 }
 
@@ -205,6 +217,7 @@ class PlayerManager @Inject constructor(
         retryJob?.cancel()
         stallJob?.cancel()
         steadyJob?.cancel()
+        freezeJob?.cancel()
         player.stop()
         _status.value = PlaybackStatus.Idle
     }
@@ -257,18 +270,14 @@ class PlayerManager @Inject constructor(
                         fail("The stream keeps arriving but the picture doesn't move. This channel's video may not play on this device.")
                         return@launch
                     }
-                    // Still loading, just slowly: keep waiting.
-                    now > buffered -> {
+                    // Still loading, fast enough to start again soon: keep waiting. A trickle that
+                    // would take minutes to fill the buffer counts as no data.
+                    now - buffered >= MIN_GROWTH_MS -> {
                         buffered = now
                         continue
                     }
-                    retries < RETRY_DELAYS_MS.size -> {
-                        retries++
-                        Log.w(TAG, "no data from ${stream.label} after $STALL_TIMEOUT_MS ms, reopening")
-                        log.retry("${stream.label}: no data for ${STALL_TIMEOUT_MS / 1000} s; reopened")
-                    }
                     else -> {
-                        fail("The provider stopped sending this channel.")
+                        reopenOrFail("no data for ${STALL_TIMEOUT_MS / 1000} s", "The provider stopped sending this channel.")
                         return@launch
                     }
                 }
@@ -276,6 +285,56 @@ class PlayerManager @Inject constructor(
                 return@launch
             }
         }
+    }
+
+    /**
+     * The player can report that it is playing while the picture stands still, e.g. when the
+     * stream's timestamps jump after the provider restarts it. Nothing else notices that (no
+     * spinner, no error), so check that frames keep coming out, or for a radio channel that the
+     * position moves, and reopen the channel when they stop.
+     */
+    private fun watchFreeze() {
+        freezeJob?.cancel()
+        freezeJob = scope.launch {
+            var lastProgress = progressMark()
+            var lastChange = SystemClock.elapsedRealtime()
+            while (true) {
+                delay(FREEZE_CHECK_MS)
+                if (player.playbackState != Player.STATE_READY) return@launch
+                val progress = progressMark()
+                val now = SystemClock.elapsedRealtime()
+                // Paused, or held by another app's sound: standing still is expected.
+                if (progress != lastProgress || !player.isPlaying) {
+                    lastProgress = progress
+                    lastChange = now
+                } else if (now - lastChange >= FREEZE_TIMEOUT_MS) {
+                    val what = if (player.videoDecoderCounters != null) "picture" else "sound"
+                    Log.w(TAG, "${current?.label}: $what frozen for ${now - lastChange} ms while playing, reopening")
+                    reopenOrFail("the $what froze for ${FREEZE_TIMEOUT_MS / 1000} s", "The picture keeps freezing on this channel.")
+                    return@launch
+                }
+            }
+        }
+    }
+
+    /** Rendered video frames, or for a channel without video the playback position. */
+    private fun progressMark(): Long {
+        val video = player.videoDecoderCounters ?: return player.currentPosition
+        video.ensureUpdated()
+        return video.renderedOutputBufferCount.toLong()
+    }
+
+    /** Reopens the channel after [why], unless the retries are used up; then shows [failure]. */
+    private fun reopenOrFail(why: String, failure: String) {
+        val stream = current ?: return
+        if (retries >= RETRY_DELAYS_MS.size) {
+            fail(failure)
+            return
+        }
+        retries++
+        Log.w(TAG, "${stream.label}: $why, reopening")
+        log.retry("${stream.label}: $why; reopened")
+        open()
     }
 
     private fun waitForNetwork() {
@@ -309,6 +368,7 @@ class PlayerManager @Inject constructor(
     private fun handleError(error: PlaybackException) {
         val stream = current ?: return
         stallJob?.cancel()
+        freezeJob?.cancel()
         val httpCode = (error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
         Log.w(TAG, "playback error on ${stream.label}: ${error.errorCodeName}${httpCode?.let { " (HTTP $it)" }.orEmpty()}")
         when {
@@ -396,6 +456,11 @@ class PlayerManager @Inject constructor(
         val RETRY_DELAYS_MS = longArrayOf(1_000, 3_000, 6_000)
         const val STALL_TIMEOUT_MS = 8_000L
         const val STUCK_MARGIN_MS = 3_000
+
+        /** A stalled stream must gain this much media per [STALL_TIMEOUT_MS] to keep waiting. */
+        const val MIN_GROWTH_MS = 2_000L
+        const val FREEZE_CHECK_MS = 1_000L
+        const val FREEZE_TIMEOUT_MS = 6_000L
         const val STEADY_MS = 30_000L
         val CONTAINER_ERRORS = setOf(
             PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
