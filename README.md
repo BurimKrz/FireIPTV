@@ -4,8 +4,6 @@ A live-TV player for Amazon Fire TV (Fire OS, Android-based). It plays your own 
 
 Built for personal use on a Fire TV Stick 4K (2nd gen, Fire OS 8.1) and installed by sideloading, not through the Appstore.
 
-The build plan, phases and what's done so far: [docs/PLAN.md](docs/PLAN.md).
-
 ## Status
 
 Version 0.3.0.
