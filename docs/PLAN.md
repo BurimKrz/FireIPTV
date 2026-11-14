@@ -17,7 +17,7 @@ A native Kotlin live-TV player for one Fire TV Stick 4K (2nd gen, Fire OS 8.1 / 
 
 ## Where we are
 
-**On the stick: 0.3.0.** Release 0.3.1 (freeze fix) waits on [PR #3](https://github.com/BurimKrz/FireIPTV/pull/3). 0.4 is built and tested on the emulator; it goes to `dev` once #3 is merged, so the release stays the freeze fix only.
+**On the stick: 0.3.0.** 0.3.1 was skipped: the freeze fix ships together with the 0.4 work as 0.4.0.
 
 | Area | Done |
 | --- | --- |
@@ -37,7 +37,7 @@ Each step is a release that goes to the stick through Settings → Updates. A st
 ### 0.3.1 — Freeze fix on the stick
 
 - [x] Reopen the channel when the provider ends the stream, when the picture stands still for 6 s while "playing", or when data only trickles in (shares the 3 retries)
-- [ ] Release 0.3.1 ([PR #3](https://github.com/BurimKrz/FireIPTV/pull/3), then tag `v0.3.1`) and watch real channels for a few days; the Log shows "the picture froze … reopened" when it kicks in
+- [ ] Released inside 0.4.0 (0.3.1 skipped). Watch real channels for a few days; the Log shows "the picture froze … reopened" when it kicks in
 
 ### 0.4 — Use less data
 
@@ -45,7 +45,7 @@ Each step is a release that goes to the stick through Settings → Updates. A st
 - [x] **Sleep timer:** off / 30 / 60 / 90 min, stepped with Fast-forward (⏩) and shown on the banner; the stream stops when it runs out
 - [x] **Data counter** in Settings: today and this month, from the system's byte count for the app (no extra requests)
 - [x] **Stream info** on the banner: resolution and the rate data arrives at, e.g. "1080p · 8.3 Mb/s"
-- [ ] Release 0.4 once 0.3.1 is on the stick
+- [ ] Release 0.4.0 (with the freeze fix) and check it on the stick
 
 ### 0.5 — When channels fail
 
