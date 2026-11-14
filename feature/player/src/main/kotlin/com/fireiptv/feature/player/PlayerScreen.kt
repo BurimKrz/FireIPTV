@@ -37,6 +37,7 @@ import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
@@ -58,8 +59,8 @@ import com.fireiptv.core.ui.ChannelLogo
 /**
  * Full-screen live TV. Up/Down zap through the list the channel was opened from (CH+/CH- too),
  * Left/Right open that list at the side, OK shows the banner (or retries a failed channel),
- * Menu (☰) adds or removes a favourite, Play/Pause stops and restarts the stream, Back returns
- * to the list.
+ * Menu (☰) adds or removes a favourite, Play/Pause stops and restarts the stream, Fast-forward (⏩)
+ * sets the sleep timer, Back returns to the list.
  */
 @Composable
 fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
@@ -68,9 +69,11 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { focus.requestFocus() }
 
+    // The TV may dim and sleep once nothing streams, e.g. after "Still watching?" went unanswered.
     val view = LocalView.current
-    DisposableEffect(view) {
-        view.keepScreenOn = true
+    val streaming = state.status !is PlaybackStatus.Idle && state.status !is PlaybackStatus.Failed
+    DisposableEffect(view, streaming) {
+        view.keepScreenOn = streaming
         onDispose { view.keepScreenOn = false }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onBackground() }
@@ -87,6 +90,8 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
             .background(Color.Black)
             .focusRequester(focus)
             .focusable()
+            // Sees every press first, also those meant for the side panel: any key counts as someone watching.
+            .onPreviewKeyEvent { event -> event.type == KeyEventType.KeyDown && viewModel.onKey() }
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 if (event.key == Key.DirectionLeft || event.key == Key.DirectionRight) {
@@ -99,8 +104,13 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
                     Key.DirectionUp, Key.ChannelDown -> viewModel.zap(forward = false)
                     Key.DirectionDown, Key.ChannelUp -> viewModel.zap(forward = true)
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter ->
-                        if (state.status is PlaybackStatus.Failed) viewModel.retry() else viewModel.toggleBanner()
+                        if (state.status is PlaybackStatus.Failed || (state.status is PlaybackStatus.Idle && state.channel != null)) {
+                            viewModel.retry()
+                        } else {
+                            viewModel.toggleBanner()
+                        }
                     Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> viewModel.togglePlayback()
+                    Key.MediaFastForward -> viewModel.cycleSleepTimer()
                     Key.Menu -> viewModel.toggleFavorite()
                     else -> return@onKeyEvent false
                 }
@@ -139,7 +149,18 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
             )
         }
         if (status is PlaybackStatus.Idle && state.channel != null && !state.missing) {
-            Message(title = "Stopped", body = "Press Play to resume.", modifier = Modifier.align(Alignment.Center))
+            Message(
+                title = "Stopped",
+                body = listOfNotNull(state.extras.stopReason, "Press OK or Play to resume.").joinToString("\n"),
+                modifier = Modifier.align(Alignment.Center),
+            )
+        }
+        state.extras.stillWatchingSeconds?.let { seconds ->
+            Message(
+                title = "Still watching?",
+                body = "Press any key to keep watching. Otherwise the stream stops in $seconds s to save data.",
+                modifier = Modifier.align(Alignment.Center),
+            )
         }
 
         state.panel?.let { panel ->
@@ -157,13 +178,13 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
             exit = fadeOut(),
             modifier = Modifier.align(Alignment.BottomStart),
         ) {
-            state.channel?.let { Banner(it, state.lastZapMs) }
+            state.channel?.let { Banner(it, state.extras, state.lastZapMs) }
         }
     }
 }
 
 @Composable
-private fun Banner(channel: BannerChannel, lastZapMs: Long?) {
+private fun Banner(channel: BannerChannel, extras: PlayerExtras, lastZapMs: Long?) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -189,9 +210,17 @@ private fun Banner(channel: BannerChannel, lastZapMs: Long?) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            // Zap time, shown while phase 1 measures Gate 1 on the stick.
-            lastZapMs?.let {
-                Text("$it ms", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.5f))
+            Column(horizontalAlignment = Alignment.End) {
+                extras.sleepMinutesLeft?.let {
+                    Text("Sleep in $it min", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                }
+                extras.streamInfo?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f))
+                }
+                // Zap time, shown until Gate 1 is measured on the stick.
+                lastZapMs?.let {
+                    Text("$it ms", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.5f))
+                }
             }
         }
     }

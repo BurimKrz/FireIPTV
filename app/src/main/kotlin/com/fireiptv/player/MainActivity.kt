@@ -10,7 +10,10 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -21,6 +24,7 @@ import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.playlist.PlaylistRepository
 import com.fireiptv.core.data.settings.SettingsRepository
 import com.fireiptv.core.data.update.UpdateRepository
+import com.fireiptv.core.data.usage.DataUsageRepository
 import com.fireiptv.core.ui.FireTheme
 import com.fireiptv.core.ui.LocalLogosEnabled
 import com.fireiptv.feature.browse.BrowseScreen
@@ -34,6 +38,8 @@ import com.fireiptv.feature.settings.log.LogScreen
 import com.fireiptv.feature.settings.playlists.AddPlaylistScreen
 import com.fireiptv.feature.settings.playlists.PlaylistsScreen
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -42,6 +48,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var playlistRepository: PlaylistRepository
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var updateRepository: UpdateRepository
+    @Inject lateinit var dataUsage: DataUsageRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -50,6 +57,16 @@ class MainActivity : ComponentActivity() {
         // Typing a long URL with a remote is painful, so it can be sent over adb:
         // adb shell am start -n com.fireiptv.player/.MainActivity --es playlist_url "http://..."
         val prefillUrl = intent.getStringExtra(EXTRA_PLAYLIST_URL)
+
+        // The data counter reads the system's byte count while the app is on screen; nothing downloads otherwise.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    dataUsage.sample()
+                    delay(DATA_SAMPLE_MS)
+                }
+            }
+        }
 
         setContent {
             FireTheme {
@@ -69,8 +86,14 @@ class MainActivity : ComponentActivity() {
         updateRepository.checkIfDue()
     }
 
+    override fun onStop() {
+        dataUsage.sampleSoon()
+        super.onStop()
+    }
+
     companion object {
         const val EXTRA_PLAYLIST_URL = "playlist_url"
+        private const val DATA_SAMPLE_MS = 60_000L
     }
 }
 
