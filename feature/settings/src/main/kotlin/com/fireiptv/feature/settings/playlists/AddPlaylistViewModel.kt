@@ -2,6 +2,8 @@ package com.fireiptv.feature.settings.playlists
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fireiptv.core.data.backup.BackupException
+import com.fireiptv.core.data.backup.BackupRepository
 import com.fireiptv.core.data.playlist.PlaylistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,15 +19,34 @@ data class AddPlaylistUiState(
     val saving: Boolean = false,
     /** Set once the playlist is saved and its import has started. */
     val added: Boolean = false,
+    val restoring: Boolean = false,
+    val restoreError: String? = null,
 )
 
 @HiltViewModel
 class AddPlaylistViewModel @Inject constructor(
     private val repository: PlaylistRepository,
+    private val backups: BackupRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(AddPlaylistUiState())
     val uiState: StateFlow<AddPlaylistUiState> = _uiState.asStateFlow()
+
+    /** After a reinstall: the playlist, favourites and the rest come back from the backup file. */
+    fun restore() {
+        if (_uiState.value.restoring || _uiState.value.saving) return
+        _uiState.update { it.copy(restoring = true, restoreError = null) }
+        viewModelScope.launch {
+            try {
+                backups.restore()
+                _uiState.update { it.copy(restoring = false, added = true) }
+            } catch (e: BackupException) {
+                // The playlist may have been added even though the rest failed: then go home anyway.
+                val added = repository.hasPlaylists()
+                _uiState.update { it.copy(restoring = false, restoreError = e.message, added = added) }
+            }
+        }
+    }
 
     fun submit(name: String, url: String) {
         if (_uiState.value.saving) return

@@ -117,6 +117,22 @@ data class RecentEntity(
     val watchedAt: Long,
 )
 
+/**
+ * A channel the user hid: it leaves every list and zapping, but search still finds it. Keyed by
+ * stream URL like [FavoriteEntity], so it stays hidden after a refresh.
+ */
+@Entity(
+    tableName = "hidden_channel",
+    primaryKeys = ["playlistId", "streamUrl"],
+    foreignKeys = [ForeignKey(PlaylistEntity::class, ["id"], ["playlistId"], onDelete = ForeignKey.CASCADE)],
+)
+data class HiddenChannelEntity(
+    val playlistId: Long,
+    val streamUrl: String,
+    val name: String,
+    val hiddenAt: Long,
+)
+
 /** A category the user made. Its channels are [UserListEntryEntity] rows. */
 @Entity(
     tableName = "user_list",

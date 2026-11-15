@@ -1,221 +1,137 @@
 # FireIPTV
 
-A live-TV player for Amazon Fire TV (Fire OS, Android-based). It plays your own M3U playlist or Xtream login. The app ships no channels, no TV guide and does no background downloads: nothing uses the network unless you are watching or press Refresh.
+A live-TV player for Amazon Fire TV. It plays your own M3U playlist or Xtream login; it ships no channels and no TV guide, and nothing uses the internet unless you are watching or press a button.
 
-Built for personal use on a Fire TV Stick 4K (2nd gen, Fire OS 8.1) and installed by sideloading, not through the Appstore.
+Made for one Fire TV Stick 4K (2nd gen, Fire OS 8.1) and installed by sideloading, not through the Appstore. Version 1.0.0.
 
-## Status
+## Install
 
-Version 0.4.0.
+Once the app is on the stick, new versions come through **Settings → Updates**. The first install:
 
-| Works now | Left out on purpose |
-| --- | --- |
-| Add a playlist by URL (M3U or Xtream `get.php` link) | TV guide (EPG) |
-| Xtream import of live channels only (~0.7 MB per refresh) | Movies and series from the provider |
-| Playlists screen: refresh, delete | Background refresh |
-| Home: groups + channel list, D-pad navigation | Parental PIN (hide groups instead) |
-| Full-screen live TV (MPEG-TS and HLS), zapping with Up/Down | |
-| Sound in MP2 too (most Albanian channels), through a small FFmpeg decoder | |
-| Your own categories, and pinning any category to the top | |
-| Channel list at the side while watching (Left/Right) | |
-| Crash and error log, readable on the TV (Settings → Log) | |
-| Favourites and recently watched, kept across refreshes | |
-| Search by channel name, on the TV (no network) | |
-| Settings: hide groups, channel start Fast/Stable | |
-| Channel logos, downloaded once and kept (can be turned off) | |
-| Account details from an Xtream login (Settings → Account) | |
-| Updates from GitHub releases, installed from Settings → Updates | |
+1. Install **Downloader** (by AFTVnews) from the Amazon Appstore.
+2. On the stick: **Settings → My Fire TV → Developer options → Install unknown apps**, allow Downloader. (No Developer options? **Settings → My Fire TV → About**, click the device name 7 times.)
+3. In Downloader, open the APK link from the [latest release](https://github.com/BurimKrz/FireIPTV/releases/latest), e.g. `https://github.com/BurimKrz/FireIPTV/releases/download/v1.0.0/FireIPTV-1.0.0.apk`, and choose **Install**.
 
-## Yes, you can install it as an APK
-
-Build the release APK, the one to put on the TV:
-
-```bash
-./gradlew assembleRelease
-# → app/build/outputs/apk/release/app-release.apk  (~3.7 MB)
-```
-
-It is shrunk with R8 and signed with your own release key, so every later release installs over it and keeps your playlists, favourites and settings. APK files are not committed to this repo (`*.apk` is in `.gitignore`).
-
-**The release key.** It lives outside the repo:
-
-| File | Holds |
-| --- | --- |
-| `~/.android/fireiptv-release.jks` | the key |
-| `~/.gradle/gradle.properties` | its path and password (`fireiptv.*` lines) |
-
-**Back up both somewhere safe** (a USB stick, a password manager). If the key is lost, a new build can't update the app on the TV: it would have to be uninstalled first, which erases your playlists and favourites. Without those lines, `assembleRelease` still builds, but unsigned.
-
-## Branches and releases
-
-Work happens on `dev`. Every push there, and every pull request, runs `.github/workflows/ci.yml` (debug and release build, parser tests). Changes reach `main` through a pull request.
-
-A release is a version tag on `main`:
-
-1. Raise `appVersion` in `app/build.gradle.kts` (the `versionCode` follows from it) and merge to `main`.
-2. `git tag v0.2.2 && git push origin v0.2.2` on `main`. `.github/workflows/release.yml` builds the signed APK and publishes it as a GitHub release, `FireIPTV-<version>.apk`. It stops if the tag and `appVersion` disagree.
-
-The workflow signs with the same key, from four repository secrets: `FIREIPTV_KEYSTORE_BASE64` (`base64 -w0 ~/.android/fireiptv-release.jks`), `FIREIPTV_KEYSTORE_PASSWORD`, `FIREIPTV_KEY_ALIAS` and `FIREIPTV_KEY_PASSWORD`. If a run fails with "base64: invalid input", the first one was pasted wrong.
-
-The app checks the latest release at most once a day when it opens (one request of a few KB), or now with OK on Settings → Updates. When a newer one is out, home shows "Settings · Update available", and OK in Settings → Updates downloads the APK, checks it's signed with the same key, and opens the system installer. The first time, Fire OS asks to allow FireIPTV to install apps.
-
-**MP2 audio** comes from `core/ffmpeg/src/main/jniLibs`, prebuilt and committed. Rebuild it with `tools/build-ffmpeg.sh` (NDK 28, about 1 GB of sources fetched into `~/build-ffmpeg`) only after a media3 version bump. See `core/ffmpeg/README.md`.
-
-## Debug builds
-
-`./gradlew assembleDebug` builds a development version (~22 MB, debug-signed, with a "Leaks" memory checker icon). Debug and release builds have different keys, so switching a device from one to the other means uninstalling first.
-
-## Build requirements
-
-- JDK 17
-- Android SDK with platform 37.2 (`compileSdk`), build-tools 37, platform-tools (`adb`)
-- `local.properties` pointing at the SDK: `sdk.dir=/home/<you>/Android/Sdk` (Android Studio writes this for you)
-
-Gradle comes with the repo (`./gradlew`); nothing else to install.
-
-## Install on the Fire TV Stick
-
-Once the app is on the stick, updates come through Settings → Updates. A first install is one of these:
-
-### Option A: Downloader with the GitHub release (easiest)
-
-1. Install **Downloader** (by AFTVnews) from the Amazon Appstore, and allow it under **Settings → My Fire TV → Developer options → Install unknown apps**.
-2. In Downloader, enter the APK link from the [latest release](https://github.com/BurimKrz/FireIPTV/releases/latest), e.g. `https://github.com/BurimKrz/FireIPTV/releases/download/v0.2.1/FireIPTV-0.2.1.apk`, and choose **Install**.
-
-### Option B: over Wi-Fi with adb
-
-1. On the stick: **Settings → My Fire TV → About**, click the device name 7 times to unlock **Developer options**.
-2. **Settings → My Fire TV → Developer options**: turn on **ADB debugging** and **Apps from unknown sources**.
-3. Find the stick's IP under **Settings → My Fire TV → About → Network**.
-4. On the PC (same network):
-
-   ```bash
-   adb connect <stick-ip>:5555        # accept the prompt on the TV the first time
-   adb install -r app/build/outputs/apk/release/app-release.apk
-   ```
-
-5. The app appears as **FireIPTV** under **Apps** on the stick. `adb install -r` again to update; your playlists are kept.
-
-### Option C: a build from this PC, through Downloader
-
-1. Set up Downloader as in option A.
-2. On the PC, serve the APK on your home network:
-
-   ```bash
-   cd app/build/outputs/apk/release && python3 -m http.server 8000
-   ```
-
-3. In Downloader, open `http://<pc-ip>:8000/app-release.apk` and choose **Install**. Stop the server afterwards (Ctrl+C).
+The app appears as **FireIPTV** under **Apps**.
 
 ## First start
 
-The first screen asks for a playlist URL. Typing a long URL with the remote is slow, so you can send it from the PC instead:
+The first screen asks for a playlist: your provider's `get.php` link or any M3U URL. A `get.php` link is imported through the Xtream API, which sends live channels only (about 0.7 MB instead of the full list with movies and series).
+
+Reinstalled? Press **Restore from backup** on that screen instead: it brings back the playlist, favourites, your categories, hidden groups and channels, and settings (see [Backup](#backup)).
+
+Typing a long link with the remote is slow; from a PC with adb you can send it:
 
 ```bash
 adb shell "am start -n com.fireiptv.player/.MainActivity --es playlist_url 'http://example.com/get.php?username=...&password=...'"
 ```
 
-The app opens on the add screen with the URL filled in and the **Import** button focused; press OK. An Xtream `get.php` link is detected automatically and imported through the Xtream API (live channels only). The provider's "Account Information" channel is left out of the lists; the same details are under Settings → Account.
-
-> Never commit your playlist URL: it contains your username and password. Keep it in `docs/` (git-ignored).
-
-## Using the app
+## Remote keys
 
 **Home**
 
-| Remote | Does |
+| Key | Does |
 | --- | --- |
-| Up / Down in the groups column | Moves through All channels, Favourites, Recently watched and the groups; resting on one for a moment shows its channels |
-| OK on a group | Jumps into its channel list |
-| OK on a channel | Plays it full screen |
-| Menu (☰) on a channel | Adds it to Favourites, or removes it (★ marks favourites) |
-| Long-press OK on a channel | Opens a menu: Favourites, a ✓ for each of your own categories, and **New category…** to make one with this channel in it |
-| Menu (☰) on a group or category | Pins it to the top (★), under Recently watched, or unpins it |
-| Long-press OK on a group or category | Pin or unpin; for your own categories also Rename and Delete (press twice) |
-| Left from the channel list | Back to the group you came from |
-| **Search** button (top right) | Search channel names as you type; case and accents don't matter ("kosove" finds "KOSOVË") |
-| **Settings** button (top right) | Playlists (refresh, delete, add), Account (status, expiry, connections), Groups (hide the ones you never watch), Channel start (Fast or Stable), Channel logos (On or Off), Updates, Log |
-| Back on home | Shows "Press Back again to exit"; a second press within 2 s leaves the app |
-
-The groups column lists All channels, Favourites and Recently watched, then pinned groups and categories, then your own categories, then the provider's groups. Your categories, like favourites, follow a channel through a refresh. "Refreshed N days ago" next to the playlist name says how old the list is; it only refreshes when you press Refresh in Settings → Playlists.
-
-**Search**
-
-| Remote | Does |
-| --- | --- |
-| Type on the on-screen keyboard | Results update as you type; each shows its group |
-| Back (closes the keyboard), then Down | Moves into the results |
-| OK on a result | Plays it; Up/Down then zaps through its group |
-| Menu (☰) | Adds it to Favourites, or removes it |
-| Long-press OK | The same menu as on home: Favourites and your categories |
+| Up / Down in the groups column | All channels, Favourites, Recently watched, pinned groups, your categories, the provider's groups |
+| OK on a group | Into its channels |
+| OK on a channel | Plays it |
+| Menu (☰) on a channel | Favourite on or off (★) |
+| Long-press OK on a channel | Favourites, your categories (✓), **New category…**, **Hide channel**; in Favourites or a category also **Move up** / **Move down** |
+| Menu (☰) on a group or category | Pins it to the top, or unpins it |
+| Long-press OK on a group or category | Pin; for your own categories also Rename and Delete (press twice) |
+| **Search** (top right) | Searches every channel by name as you type, hidden ones included; case and accents don't matter ("kosove" finds "KOSOVË") |
+| Back | Press twice to leave the app |
 
 **Watching**
 
-| Remote | Does |
+| Key | Does |
 | --- | --- |
-| Down / Up (or CH+ / CH-) | Next / previous channel in the list you opened it from (a channel opened from Recently watched zaps through its group); the banner moves at once, the stream switches when you stop pressing |
-| OK | Shows or hides the channel banner; on an error, tries again |
-| Menu (☰) | Adds the channel to Favourites, or removes it |
-| Left or Right | Opens the list you're watching from at the side, on the current channel: Up/Down move through it, OK plays one, Left/Right or Back closes it |
-| Play/Pause | Stops the stream (no data used) / starts it again |
-| Back | Returns to the list, on the channel you were watching |
+| Up / Down, CH+ / CH- | Previous / next channel in the list you came from (hidden channels are skipped) |
+| Left / Right | The list at the side; Up/Down and OK pick a channel, Back closes it |
+| OK | Shows the banner (number, name, resolution, data rate) |
+| Menu (☰) | Favourite on or off |
+| Play/Pause | Stops the stream (no data used), or starts it again |
+| Fast-forward (⏩) | Sleep timer: off, 30, 60, 90 minutes |
+| Back | Back to the list, on the channel you watched |
 
-If the internet drops, the player shows "No internet connection" and starts the channel again by itself when it's back. If the provider refuses a channel, the message says why (account expired, or all connections in use). A channel that freezes is reopened by itself; if that doesn't help, the player says so instead of spinning. Crashes, failed channels and automatic retries are listed under Settings → Log (the newest 100, links hidden).
+**When a channel fails**
 
-Refresh only runs when you press it. Nothing updates in the background, and the stream closes as soon as you leave the player or press Home. Each channel logo downloads once (about 25 KB) and is kept in a 50 MB cache; logos for rows you scroll past are not fetched, and turning logos off in Settings stops all logo downloads.
+The player retries by itself (three times) and reopens a stream that freezes or stops. If it still can't play, it says why: the channel is offline, the account expired, or all its connections are in use (another device or app is watching on the same login). If the channel has other versions (HD, SD, a [BK] backup), they are listed under the message: Up/Down to choose, OK to play. No internet? It waits and starts again when the connection is back.
+
+After 3 hours without a key press it asks "Still watching?" and stops the stream if nobody answers, so a TV left on doesn't download all night.
+
+## Settings
+
+| Row | Does |
+| --- | --- |
+| Playlists | Refresh (only when you press it), delete, add |
+| Account | Status, expiry date and connections, from an Xtream provider |
+| Groups | Hide groups you never watch; search still finds their channels |
+| Hidden channels | Channels you hid one by one; OK shows one again |
+| Channel start | Fast (starts sooner) or Stable (pauses less on weak Wi-Fi) |
+| Channel logos | On (each downloads once, 50 MB cache) or Off (no logo downloads) |
+| Data used | Today and this month, counted by Fire OS |
+| Back up / Restore | See below |
+| Updates | Checks GitHub, downloads and installs a new version |
+| Log | Crashes, failed channels and automatic retries (links hidden) |
+
+### Backup
+
+**Back up** saves favourites, your categories, hidden groups and channels, pinned groups, settings and the playlist login to **Pictures/FireIPTV-backup.png** on the stick. It is an image (a small card saying "FireIPTV backup") because an image is the only kind of file Fire OS lets the app read again after it was uninstalled; the data rides inside it. The file holds your playlist login, so it stays on the stick.
+
+**Restore** adds the backup to what is there. After a reinstall, use **Restore from backup** on the first screen and allow "photos and media" when asked: the playlist is added, imported, and everything else follows.
 
 ## Data use
 
-Measured on 2026-10-23 with an Xtream provider (MPEG-TS streams):
+Measured with an Xtream provider (MPEG-TS):
 
 | What | Data |
 | --- | --- |
-| Watching an HD channel | about 1.1 GB per hour |
-| Watching the SD version of the same channel | about 0.7 GB per hour |
-| Opening a channel | 2–3 MB extra at the start (the provider sends a few seconds at once) |
+| Watching HD | about 1.1 GB per hour |
+| Watching SD | about 0.7 GB per hour |
+| Opening a channel | 2–3 MB extra at the start |
 | Refreshing the playlist | about 0.7 MB |
-| Opening Settings → Account | about 1 KB |
-| A channel logo, the first time it is shown | about 25 KB, then never again |
+| A channel logo, the first time | about 25 KB |
 | Update check, at most once a day when the app opens | a few KB |
-| Installing an update, only when you press OK | about 3.7 MB |
-| Home screen, Settings, app in the background, playback stopped | nothing |
+| Home, Settings, stopped, in the background | nothing |
 
-Video is almost all of it. Picking a channel's SD version is the one choice that changes the total much.
+Video is almost all of it: choosing a channel's SD version is the one setting that changes the total much.
 
-## Run on the emulator (development)
+## Left out on purpose
 
-```bash
-emulator -avd FireOS8_API30_TV &          # Android TV API 30 = Fire OS 8
-adb wait-for-device
-./gradlew installDebug
-adb shell am start -n com.fireiptv.player/.MainActivity
-```
+TV guide (EPG), catch-up, movies and series, parental PIN (hide groups instead), background refresh, audio track choice, picture zoom.
 
-A public test playlist (about 11,000 channels): `https://iptv-org.github.io/iptv/index.m3u`.
+---
 
-## Tests
+## For development
+
+**Build.** JDK 17 and the Android SDK (platform 37.2, build-tools 37); `local.properties` with `sdk.dir=...`.
 
 ```bash
-./gradlew :core:parser:test                       # M3U parser, JVM, seconds
-./gradlew :core:data:connectedDebugAndroidTest    # import, database, update JSON; needs an emulator or device
-./gradlew :core:player:connectedDebugAndroidTest  # stall watchdog; needs an emulator or device
+./gradlew assembleDebug                          # debug build (~22 MB, debug key)
+./gradlew assembleRelease                        # release build (~3.7 MB, R8, release key)
+./gradlew :core:parser:test lintDebug            # JVM tests and lint, as CI runs them
+./gradlew connectedDebugAndroidTest              # database, import, player tests on an emulator
+emulator -avd FireOS8_API30_TV &                 # Android TV API 30 = Fire OS 8
 ```
 
-## Project layout
+Debug and release builds have different keys: switching a device between them needs an uninstall (Back up first). Public test playlist: `https://iptv-org.github.io/iptv/index.m3u`.
+
+**Release key.** `~/.android/fireiptv-release.jks`, with its path and passwords as `fireiptv.*` lines in `~/.gradle/gradle.properties`. Keep a copy off this PC: without it, no update can install over the app on the TV.
+
+**Branches and releases.** Work happens on `dev`; CI (`.github/workflows/ci.yml`) builds, lints and tests every push and pull request. A release: raise `appVersion` in `app/build.gradle.kts`, merge `dev` into `main` by pull request, then `git tag v<version> && git push origin v<version>`. `release.yml` builds the signed APK from four secrets (`FIREIPTV_KEYSTORE_BASE64`, `FIREIPTV_KEYSTORE_PASSWORD`, `FIREIPTV_KEY_ALIAS`, `FIREIPTV_KEY_PASSWORD`) and publishes `FireIPTV-<version>.apk`; the app finds it. "base64: invalid input" means the first secret was pasted wrong.
+
+**MP2 audio** comes from a prebuilt FFmpeg decoder in `core/ffmpeg/src/main/jniLibs`; rebuild it with `tools/build-ffmpeg.sh` only after a Media3 update (see `core/ffmpeg/README.md`).
 
 | Module | Holds |
 | --- | --- |
-| `:app` | Activity, navigation, Hilt setup, Fire TV manifest |
-| `:feature:browse` | Home: groups and channel list |
-| `:feature:settings` | Settings: playlists, account, groups, start mode, logos, updates |
-| `:feature:player` | Full-screen player, zapping, channel banner |
-| `:core:data` | Room database, playlist import (M3U + Xtream), repositories, update check and download |
+| `:app` | Activity, navigation, manifest, Baseline Profile |
+| `:feature:browse` | Home, search, long-press menus |
+| `:feature:player` | Full-screen player, zapping, banner, other versions on failure |
+| `:feature:settings` | Settings screens, add playlist, backup and restore buttons |
+| `:core:data` | Room database, M3U and Xtream import, repositories, backup, updates |
 | `:core:parser` | Streaming M3U parser |
-| `:core:player` | `PlayerManager`: ExoPlayer, stream type picking, retries, stall watchdog, zap timing |
-| `:core:ffmpeg` | FFmpeg audio decoder for MP2 (media3 sources + prebuilt native library) |
-| `:core:log` | `AppLog`: crashes, player errors and retries kept on the device for Settings → Log |
-| `:core:ui` | TV theme |
-| `tools/` | `build-ffmpeg.sh` |
-| `.github/workflows/` | `ci.yml` (dev and pull requests), `release.yml` (version tags) |
-
-CI runs on every push to `dev`; tagged versions build the release APK.
+| `:core:player` | ExoPlayer setup, retries, stall and freeze watchdogs |
+| `:core:ffmpeg` | MP2 audio decoder |
+| `:core:log` | The on-device log behind Settings → Log |
+| `:core:ui` | TV theme, logos, focus helpers |

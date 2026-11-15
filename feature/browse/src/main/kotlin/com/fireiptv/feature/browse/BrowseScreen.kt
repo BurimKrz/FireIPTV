@@ -132,7 +132,20 @@ fun BrowseScreen(
                 )
             }
         }
-        channelOptions?.let { id -> ChannelOptionsDialog(channelId = id, onDismiss = { channelOptions = null }) }
+        channelOptions?.let { id ->
+            ChannelOptionsDialog(
+                channelId = id,
+                list = state.selectedList,
+                // The hidden row leaves the list: put focus on the channel that takes its place.
+                onHidden = {
+                    val index = channels.itemSnapshotList.indexOfFirst { it?.id == id }
+                    val next = if (index < 0) null else (channels.peek(index + 1)?.let { it to index } ?: channels.peek(index - 1)?.let { it to index - 1 })
+                    returnTarget = next?.let { (row, at) -> ReturnTarget(row.id, at) }
+                    if (next == null) focusGroups = true
+                },
+                onDismiss = { channelOptions = null },
+            )
+        }
         groupOptions?.let { row ->
             val listId = (row.list as? ChannelList.Custom)?.id
             GroupOptionsDialog(
@@ -294,6 +307,8 @@ private fun ChannelsColumn(
                 channels.loadState.refresh is LoadState.Loading -> return@Column
                 state.selectedList == ChannelList.Favorites ->
                     "No favourites yet. Long-press OK on a channel, or press Menu (☰), to add it."
+                state.selectedList == ChannelList.All && state.selectedGroup?.channelCount == 0 ->
+                    "Every channel is hidden. Show groups or channels again in Settings."
                 state.selectedList == ChannelList.Recents -> "Channels you watch will appear here."
                 state.selectedList is ChannelList.Custom ->
                     "No channels yet. Long-press OK on any channel and pick this category to add it."

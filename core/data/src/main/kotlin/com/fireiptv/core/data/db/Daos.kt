@@ -49,7 +49,12 @@ data class ChannelSearchItem(
     val groupId: Long?,
     val groupTitle: String?,
     val favorite: Boolean,
+    /** The user hid it: search still finds it, so it can be watched or shown again. */
+    val hidden: Boolean,
 )
+
+/** A channel the user hid, for the hidden channels settings screen. */
+data class HiddenChannelItem(val streamUrl: String, val name: String, val groupTitle: String?, val hiddenAt: Long)
 
 @Dao
 interface PlaylistDao {
@@ -145,7 +150,7 @@ interface GroupDao {
 
     @Query(
         """
-        SELECT g.id, g.title, (SELECT COUNT(*) FROM channel c WHERE c.groupId = g.id) AS channelCount, g.pinnedAt
+        SELECT g.id, g.title, (SELECT COUNT(*) FROM channel c WHERE c.groupId = g.id AND $NOT_HIDDEN_CHANNEL) AS channelCount, g.pinnedAt
         FROM channel_group g
         WHERE g.playlistId = :playlistId AND g.hidden = 0
         ORDER BY g.sortOrder
@@ -192,7 +197,7 @@ interface ChannelDao {
     @Query(
         """
         SELECT id, name, number, sortOrder, logoUrl, $IS_FAVORITE FROM channel c
-        WHERE playlistId = :playlistId AND $NOT_IN_HIDDEN_GROUP
+        WHERE playlistId = :playlistId AND $NOT_IN_HIDDEN_GROUP AND $NOT_HIDDEN_CHANNEL
         ORDER BY sortOrder
         """,
     )
@@ -202,7 +207,7 @@ interface ChannelDao {
     @Query(
         """
         SELECT id, name, number, sortOrder, logoUrl, $IS_FAVORITE FROM channel c
-        WHERE playlistId = :playlistId AND groupId = :groupId
+        WHERE playlistId = :playlistId AND groupId = :groupId AND $NOT_HIDDEN_CHANNEL
         ORDER BY sortOrder
         """,
     )
@@ -211,7 +216,8 @@ interface ChannelDao {
     /** Channels of one playlist whose name matches the FTS [query], in playlist order. */
     @Query(
         """
-        SELECT c.id, c.name, c.number, c.sortOrder, c.logoUrl, c.groupId, g.title AS groupTitle, $IS_FAVORITE
+        SELECT c.id, c.name, c.number, c.sortOrder, c.logoUrl, c.groupId, g.title AS groupTitle, $IS_FAVORITE,
+            NOT $NOT_HIDDEN_CHANNEL AS hidden
         FROM channel_fts
         JOIN channel c ON c.id = channel_fts.rowid
         LEFT JOIN channel_group g ON g.id = c.groupId
@@ -225,20 +231,20 @@ interface ChannelDao {
     @Query("SELECT COUNT(*) FROM channel WHERE playlistId = :playlistId")
     suspend fun count(playlistId: Long): Int
 
-    /** Channels in "All channels": everything outside hidden groups. */
-    @Query("SELECT COUNT(*) FROM channel c WHERE playlistId = :playlistId AND $NOT_IN_HIDDEN_GROUP")
+    /** Channels in "All channels": everything outside hidden groups, minus hidden channels. */
+    @Query("SELECT COUNT(*) FROM channel c WHERE playlistId = :playlistId AND $NOT_IN_HIDDEN_GROUP AND $NOT_HIDDEN_CHANNEL")
     fun observeVisibleCount(playlistId: Long): Flow<Int>
 
     @Query("SELECT * FROM channel WHERE id = :id")
     suspend fun get(id: Long): ChannelEntity?
 
     // Zapping and list positions. A null groupId means all channels outside hidden groups; both
-    // use sortOrder, the same order the browse lists show.
+    // use sortOrder, the same order the browse lists show. Hidden channels are skipped.
 
     @Query(
         """
         SELECT * FROM channel c
-        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP) AND sortOrder > :sortOrder
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP) AND $NOT_HIDDEN_CHANNEL AND sortOrder > :sortOrder
         ORDER BY sortOrder LIMIT 1
         """,
     )
@@ -247,7 +253,7 @@ interface ChannelDao {
     @Query(
         """
         SELECT * FROM channel c
-        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP) AND sortOrder < :sortOrder
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP) AND $NOT_HIDDEN_CHANNEL AND sortOrder < :sortOrder
         ORDER BY sortOrder DESC LIMIT 1
         """,
     )
@@ -256,7 +262,7 @@ interface ChannelDao {
     @Query(
         """
         SELECT * FROM channel c
-        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP)
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP) AND $NOT_HIDDEN_CHANNEL
         ORDER BY sortOrder LIMIT 1
         """,
     )
@@ -265,7 +271,7 @@ interface ChannelDao {
     @Query(
         """
         SELECT * FROM channel c
-        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP)
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP) AND $NOT_HIDDEN_CHANNEL
         ORDER BY sortOrder DESC LIMIT 1
         """,
     )
@@ -274,15 +280,33 @@ interface ChannelDao {
     @Query(
         """
         SELECT COUNT(*) FROM channel c
-        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP) AND sortOrder < :sortOrder
+        WHERE playlistId = :playlistId AND (:groupId IS NULL OR groupId = :groupId) AND (:groupId IS NOT NULL OR $NOT_IN_HIDDEN_GROUP) AND $NOT_HIDDEN_CHANNEL AND sortOrder < :sortOrder
         """,
     )
     suspend fun position(playlistId: Long, groupId: Long?, sortOrder: Int): Int
+
+    /**
+     * Channels named with all of [words] (FTS terms), for finding a channel's other versions.
+     * The caller compares the names; this only narrows 28k channels down to a few.
+     */
+    @Query(
+        """
+        SELECT c.* FROM channel_fts JOIN channel c ON c.id = channel_fts.rowid
+        WHERE channel_fts MATCH :words AND c.playlistId = :playlistId AND $NOT_HIDDEN_CHANNEL
+        ORDER BY c.sortOrder
+        LIMIT :limit
+        """,
+    )
+    suspend fun withWords(playlistId: Long, words: String, limit: Int): List<ChannelEntity>
 }
 
 /** Whether channel `c` is a favourite: one primary-key probe per row. */
 internal const val IS_FAVORITE =
     "EXISTS(SELECT 1 FROM favorite f WHERE f.playlistId = c.playlistId AND f.streamUrl = c.streamUrl) AS favorite"
+
+/** Channel `c` is not one the user hid by itself. */
+internal const val NOT_HIDDEN_CHANNEL =
+    "NOT EXISTS(SELECT 1 FROM hidden_channel hc WHERE hc.playlistId = c.playlistId AND hc.streamUrl = c.streamUrl)"
 
 /** Channel `c` is not in a group the user hid. */
 internal const val NOT_IN_HIDDEN_GROUP =

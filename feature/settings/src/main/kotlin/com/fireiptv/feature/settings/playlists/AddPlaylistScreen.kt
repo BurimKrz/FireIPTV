@@ -23,7 +23,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.foundation.layout.Row
 import androidx.tv.material3.Button
+import androidx.tv.material3.OutlinedButton
+import com.fireiptv.feature.settings.backup.rememberRestoreAction
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.fireiptv.core.ui.verticalDpadMovesFocus
@@ -38,6 +41,7 @@ fun AddPlaylistScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     LaunchedEffect(state.added) { if (state.added) onAdded() }
 
+    val restore = rememberRestoreAction(viewModel::restore)
     var url by rememberSaveable { mutableStateOf(prefillUrl.orEmpty()) }
     var name by rememberSaveable { mutableStateOf("") }
 
@@ -78,12 +82,23 @@ fun AddPlaylistScreen(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             modifier = fieldModifier,
         )
-        Button(
-            onClick = { viewModel.submit(name, url) },
-            enabled = !state.saving,
-            modifier = Modifier.focusRequester(importFocus),
-        ) {
-            Text(if (state.saving) "Saving…" else "Import")
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Button(
+                onClick = { viewModel.submit(name, url) },
+                enabled = !state.saving && !state.restoring,
+                modifier = Modifier.focusRequester(importFocus),
+            ) {
+                Text(if (state.saving) "Saving…" else "Import")
+            }
+            OutlinedButton(onClick = restore, enabled = !state.saving && !state.restoring) {
+                Text(if (state.restoring) "Restoring… (loading the playlist)" else "Restore from backup")
+            }
         }
+        Text(
+            state.restoreError ?: "Reinstalled? Restore from backup brings back the playlist, favourites and settings " +
+                "saved with Settings → Back up.",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (state.restoreError != null) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }

@@ -54,6 +54,10 @@ data class BannerChannel(
 @Immutable
 data class PanelChannel(val id: Long, val number: Int, val name: String, val logoUrl: String?, val favorite: Boolean)
 
+/** Another version of a failed channel (HD, SD, backup), offered on the error message. */
+@Immutable
+data class OtherVersion(val id: Long, val name: String)
+
 /** The side list is open; it starts on the row at [startIndex], the channel in the banner. */
 data class PanelState(val title: String, val currentId: Long, val startIndex: Int)
 
@@ -68,6 +72,8 @@ data class PlayerUiState(
     val accountNote: String? = null,
     val panel: PanelState? = null,
     val extras: PlayerExtras = PlayerExtras(),
+    /** Set while the channel has failed: its other versions, to try with one press. */
+    val otherVersions: List<OtherVersion> = emptyList(),
 )
 
 /** What the player shows besides the channel: data-saving prompts, the sleep timer, stream info. */
@@ -112,6 +118,7 @@ class PlayerViewModel @Inject constructor(
     private val accountNote = MutableStateFlow<String?>(null)
     private val panel = MutableStateFlow<PanelState?>(null)
     private val extras = MutableStateFlow(PlayerExtras())
+    private val otherVersions = MutableStateFlow<List<OtherVersion>>(emptyList())
 
     /** Set with the first channel: the playlist and list the side panel shows. */
     private val panelSource = MutableStateFlow<Pair<Long, ChannelList>?>(null)
@@ -134,9 +141,9 @@ class PlayerViewModel @Inject constructor(
         bannerVisible,
         combine(playerManager.status, accountNote, ::Pair),
         combine(playerManager.lastZapMs, missing, ::Pair),
-        combine(panel, extras, ::Pair),
-    ) { channel, visible, (status, note), (zapMs, missing), (panel, extras) ->
-        PlayerUiState(channel, visible, status, zapMs, missing, note, panel, extras)
+        combine(panel, extras, otherVersions, ::Triple),
+    ) { channel, visible, (status, note), (zapMs, missing), (panel, extras, versions) ->
+        PlayerUiState(channel, visible, status, zapMs, missing, note, panel, extras, versions)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PlayerUiState())
 
     private var target: ChannelEntity? = null
@@ -198,11 +205,17 @@ class PlayerViewModel @Inject constructor(
                     recordedId = channel.id
                     channels.recordWatched(channel)
                 }
-                if (status is PlaybackStatus.Failed && status.httpCode in REFUSAL_CODES) {
-                    // One small account request, only now, to say why instead of showing a bare HTTP code.
-                    launch { accountNote.value = explainRefusal() }
-                } else if (status !is PlaybackStatus.Failed) {
+                if (status is PlaybackStatus.Failed) {
+                    // One small account request, only now, to say why instead of showing a bare
+                    // HTTP code; or, when the stream was cut, whether another device took the account.
+                    when {
+                        status.httpCode in REFUSAL_CODES -> launch { accountNote.value = explainRefusal() }
+                        status.cut -> launch { accountNote.value = explainDrop(status.message) }
+                    }
+                    if (channel != null) launch { otherVersions.value = findOtherVersions(channel) }
+                } else {
                     accountNote.value = null
+                    otherVersions.value = emptyList()
                 }
                 if (status !is PlaybackStatus.Idle) extras.update { it.copy(stopReason = null) }
             }
@@ -363,6 +376,14 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
+    /** OK on one of a failed channel's other versions plays it; Up/Down then zap the same list. */
+    fun playVersion(channelId: Long) {
+        playFromPanel(channelId)
+    }
+
+    private suspend fun findOtherVersions(failed: ChannelEntity): List<OtherVersion> =
+        channels.otherVersions(failed).map { OtherVersion(it.id, it.name) }
+
     /** OK on a failed or stopped channel tries it again. */
     fun retry() {
         playerManager.resume()
@@ -439,6 +460,21 @@ class PlayerViewModel @Inject constructor(
                     "Stop playback on any other device; if nothing else is playing, wait a minute, then press OK."
             else -> "Your account is active and free, so the provider is refusing this channel itself."
         }
+    }
+
+    /**
+     * The provider cut the stream without refusing it. When the account's connections are all
+     * taken, another device or app is the likely cause (one-connection accounts drop the older
+     * stream when a new one opens), so say that; otherwise there is nothing more to explain.
+     */
+    private suspend fun explainDrop(message: String): String? {
+        val info = (accounts.load() as? AccountResult.Loaded)?.info ?: return null
+        val active = info.activeConnections ?: return null
+        val max = info.maxConnections ?: return null
+        if (active < max) return null
+        // Panels can count a closed stream for a minute, so this one may still be in the number.
+        return "$message Your provider reports $active of $max connections in use: if another device or app " +
+            "(a phone, a PC emulator) is watching on this login, it took the stream. Stop it there, then press OK."
     }
 
     override fun onCleared() {

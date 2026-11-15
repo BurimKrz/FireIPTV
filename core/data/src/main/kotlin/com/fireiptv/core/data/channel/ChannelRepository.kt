@@ -9,12 +9,15 @@ import com.fireiptv.core.data.db.GroupSetting
 import com.fireiptv.core.data.db.ChannelListItem
 import com.fireiptv.core.data.db.ChannelSearchItem
 import com.fireiptv.core.data.db.GroupSummary
+import com.fireiptv.core.data.db.HiddenChannelEntity
+import com.fireiptv.core.data.db.HiddenChannelItem
 import com.fireiptv.core.data.db.PlayerDatabase
 import com.fireiptv.core.data.db.RecentEntity
 import com.fireiptv.core.data.db.UserListEntity
 import com.fireiptv.core.data.db.UserListEntryEntity
 import com.fireiptv.core.data.db.UserListSummary
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
@@ -66,7 +69,8 @@ class ChannelRepository @Inject constructor(db: PlayerDatabase) {
         if (isIn) {
             userListDao.removeEntry(listId, channel.streamUrl)
         } else {
-            userListDao.addEntry(UserListEntryEntity(listId, channel.streamUrl, channel.name, System.currentTimeMillis()))
+            val order = nextOrder(userListDao.lastEntrySortOrder(listId))
+            userListDao.addEntry(UserListEntryEntity(listId, channel.streamUrl, channel.name, order))
         }
         return !isIn
     }
@@ -105,7 +109,57 @@ class ChannelRepository @Inject constructor(db: PlayerDatabase) {
         val words = text.split(NOT_A_LETTER_OR_DIGIT).filter { it.isNotEmpty() }.take(MAX_SEARCH_WORDS)
         if (words.isEmpty()) return flowOf(emptyList())
         // Only letters and digits reach MATCH, so typed quotes or operators can't break the query.
-        return channelDao.search(playlistId, words.joinToString(" ") { "$it*" }, SEARCH_LIMIT)
+        // Lower case, so a typed OR, AND or NEAR is a word to find, not an FTS operator.
+        return channelDao.search(playlistId, words.joinToString(" ") { "${it.lowercase()}*" }, SEARCH_LIMIT)
+    }
+
+    /**
+     * Other versions of [channel]: the same name in another quality or as a backup, e.g.
+     * "AL| TOP CHANNEL HD" for "AL| TOP CHANNEL FHD". Hidden channels and copies of the same
+     * stream are left out. Local only.
+     */
+    suspend fun otherVersions(channel: ChannelEntity): List<ChannelEntity> {
+        val key = versionKey(channel.name)
+        if (key.isEmpty()) return emptyList()
+        return channelDao.withWords(channel.playlistId, key, VERSION_CANDIDATES)
+            .filter { it.streamUrl != channel.streamUrl && versionKey(it.name) == key }
+            .distinctBy { it.streamUrl }
+            .take(MAX_VERSIONS)
+    }
+
+    // Hidden channels: out of every list and zap, still in search, kept across refreshes.
+
+    fun observeHidden(channel: ChannelEntity): Flow<Boolean> = libraryDao.observeIsHidden(channel.playlistId, channel.streamUrl)
+
+    fun hiddenChannels(playlistId: Long): Flow<List<HiddenChannelItem>> = libraryDao.observeHidden(playlistId)
+
+    /** Hides the channel, or shows it again; returns whether it is hidden now. */
+    suspend fun toggleHidden(channelId: Long): Boolean {
+        val channel = channelDao.get(channelId) ?: return false
+        val hidden = libraryDao.observeIsHidden(channel.playlistId, channel.streamUrl).first()
+        if (hidden) {
+            libraryDao.unhide(channel.playlistId, channel.streamUrl)
+        } else {
+            libraryDao.hide(HiddenChannelEntity(channel.playlistId, channel.streamUrl, channel.name, System.currentTimeMillis()))
+        }
+        return !hidden
+    }
+
+    suspend fun showChannel(playlistId: Long, streamUrl: String) = libraryDao.unhide(playlistId, streamUrl)
+
+    suspend fun showAllChannels(playlistId: Long) = libraryDao.unhideAll(playlistId)
+
+    /**
+     * Moves the channel one place up or down in favourites or one of the user's categories.
+     * Returns false for other lists, or at either end.
+     */
+    suspend fun move(channelId: Long, list: ChannelList, up: Boolean): Boolean {
+        val channel = channelDao.get(channelId) ?: return false
+        return when (list) {
+            ChannelList.Favorites -> libraryDao.moveFavorite(channel.playlistId, channel.streamUrl, up)
+            is ChannelList.Custom -> userListDao.moveEntry(list.id, channel.streamUrl, up)
+            else -> false
+        }
     }
 
     suspend fun channel(id: Long): ChannelEntity? = channelDao.get(id)
@@ -169,10 +223,14 @@ class ChannelRepository @Inject constructor(db: PlayerDatabase) {
         if (isFavorite) {
             libraryDao.removeFavorite(channel.playlistId, channel.streamUrl)
         } else {
-            libraryDao.addFavorite(FavoriteEntity(channel.playlistId, channel.streamUrl, channel.name, System.currentTimeMillis()))
+            val order = nextOrder(libraryDao.lastFavoriteSortOrder(channel.playlistId))
+            libraryDao.addFavorite(FavoriteEntity(channel.playlistId, channel.streamUrl, channel.name, order))
         }
         return !isFavorite
     }
+
+    /** A new entry goes last, with an order no other entry has, so Move up/down can always swap. */
+    private fun nextOrder(last: Long?): Long = maxOf(System.currentTimeMillis(), (last ?: 0L) + 1)
 
     suspend fun recordWatched(channel: ChannelEntity) {
         libraryDao.upsertRecent(RecentEntity(channel.playlistId, channel.streamUrl, channel.name, System.currentTimeMillis()))
@@ -195,6 +253,27 @@ class ChannelRepository @Inject constructor(db: PlayerDatabase) {
         const val RECENTS_KEPT = 20
         const val SEARCH_LIMIT = 300
         const val MAX_SEARCH_WORDS = 6
+        const val VERSION_CANDIDATES = 60
+        const val MAX_VERSIONS = 6
         val NOT_A_LETTER_OR_DIGIT = Regex("[^\\p{L}\\p{N}]+")
     }
 }
+
+/**
+ * A channel's name without its quality and backup marks, in lower case: "AL| TOP CHANNEL HD [BK]"
+ * and "AL| Top Channel FHD" both give "al top channel". Channels with the same key are versions of
+ * one channel. "+1" stays, since that is a different (time-shifted) channel.
+ */
+internal fun versionKey(name: String): String =
+    name.lowercase()
+        .replace(BRACKETED, " ")
+        .split(NOT_ALNUM)
+        .filter { it.isNotEmpty() && it !in QUALITY_WORDS }
+        .joinToString(" ")
+
+private val BRACKETED = Regex("""\[[^\]]*]|\([^)]*\)""")
+private val NOT_ALNUM = Regex("[^\\p{L}\\p{N}]+")
+private val QUALITY_WORDS = setOf(
+    "sd", "hd", "fhd", "uhd", "qhd", "hq", "lq", "4k", "8k", "hevc", "h264", "h265", "x264", "x265",
+    "480p", "576p", "720p", "1080p", "1080i", "2160p", "25fps", "50fps", "60fps", "fps", "bk", "backup", "raw",
+)

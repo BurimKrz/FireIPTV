@@ -19,9 +19,14 @@ subprojects {
                 compileSdk {
                     version = release(37) { minorApiLevel = 2 }
                 }
-                defaultConfig.minSdk = 25
+                // Fire OS 7 (Android 9) and up; the one stick this is for runs Fire OS 8 (Android 11).
+                defaultConfig.minSdk = 26
                 compileOptions.sourceCompatibility = JavaVersion.VERSION_17
                 compileOptions.targetCompatibility = JavaVersion.VERSION_17
+                // CI runs lint on every push: a warning fails the build like an error.
+                lint.lintConfig = rootProject.file("lint.xml")
+                lint.warningsAsErrors = true
+                lint.abortOnError = true
             }
         }
     }

@@ -30,6 +30,8 @@ data class SearchResult(
     val logoUrl: String?,
     val groupTitle: String?,
     val favorite: Boolean,
+    /** Hidden from the lists by the user; search still finds it. */
+    val hidden: Boolean,
     /** The list Up/Down zaps through when this result is played: its group. */
     val zapList: ChannelList,
 )
@@ -67,6 +69,7 @@ class SearchViewModel @Inject constructor(
                             logoUrl = it.logoUrl,
                             groupTitle = it.groupTitle,
                             favorite = it.favorite,
+                            hidden = it.hidden,
                             zapList = it.groupId?.let { group -> ChannelList.Group(group) } ?: ChannelList.All,
                         )
                     }

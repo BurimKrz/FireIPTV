@@ -18,6 +18,7 @@ dependencies {
     implementation(project(":core:log"))
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.datasource.okhttp)
+    implementation(libs.androidx.core.ktx)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.coroutines.android)
 

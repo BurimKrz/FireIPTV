@@ -7,6 +7,7 @@ import android.net.NetworkCapabilities
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
+import androidx.core.net.toUri
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -68,8 +69,11 @@ sealed interface PlaybackStatus {
     /** The device is offline; the channel restarts by itself when a network is back. */
     data object WaitingForNetwork : PlaybackStatus
 
-    /** [httpCode] is set when the provider refused the stream, so callers can explain why. */
-    data class Failed(val message: String, val httpCode: Int? = null) : PlaybackStatus
+    /**
+     * [httpCode] is set when the provider refused the stream, so callers can explain why.
+     * [cut] is set when the stream opened but the provider stopped sending it, every retry.
+     */
+    data class Failed(val message: String, val httpCode: Int? = null, val cut: Boolean = false) : PlaybackStatus
 }
 
 /**
@@ -328,7 +332,7 @@ class PlayerManager @Inject constructor(
     private fun reopenOrFail(why: String, failure: String) {
         val stream = current ?: return
         if (retries >= RETRY_DELAYS_MS.size) {
-            fail(failure)
+            fail(failure, cut = true)
             return
         }
         retries++
@@ -344,12 +348,12 @@ class PlayerManager @Inject constructor(
         _status.value = PlaybackStatus.WaitingForNetwork
     }
 
-    private fun fail(message: String, httpCode: Int? = null) {
+    private fun fail(message: String, httpCode: Int? = null, cut: Boolean = false) {
         zapStartedAt = 0L
         log.error("${current?.label}: $message")
         // Closes the connection if it's still open: a one-connection account needs it for the next channel.
         player.stop()
-        _status.value = PlaybackStatus.Failed(message, httpCode)
+        _status.value = PlaybackStatus.Failed(message, httpCode, cut)
     }
 
     private fun mediaSource(stream: StreamRequest): MediaSource {
@@ -449,7 +453,7 @@ class PlayerManager @Inject constructor(
     }
 
     private fun isHls(url: String): Boolean =
-        Util.inferContentType(android.net.Uri.parse(url)) == C.CONTENT_TYPE_HLS || ".m3u8" in url.lowercase()
+        Util.inferContentType(url.toUri()) == C.CONTENT_TYPE_HLS || ".m3u8" in url.lowercase()
 
     private companion object {
         const val TAG = "FirePlayer"

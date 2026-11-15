@@ -17,8 +17,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RecentEntity::class,
         UserListEntity::class,
         UserListEntryEntity::class,
+        HiddenChannelEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -28,6 +29,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 4, to = 5),
         // v6: the user's own categories, and pinned groups.
         AutoMigration(from = 5, to = 6),
+        // v7: single hidden channels.
+        AutoMigration(from = 6, to = 7),
     ],
 )
 abstract class PlayerDatabase : RoomDatabase() {

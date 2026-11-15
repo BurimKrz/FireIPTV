@@ -47,9 +47,18 @@ import androidx.compose.material3.Text as FieldText
 /**
  * Long-press OK on a channel: favourite, each of the user's categories, and a new one. Every row
  * toggles and the menu stays open, so a channel can go into several categories in one visit.
+ * Opened from favourites or a category ([list]), it can also move the channel up or down there.
+ * Hide closes the menu, since the channel leaves the list behind it.
  */
 @Composable
-fun ChannelOptionsDialog(channelId: Long, onDismiss: () -> Unit, viewModel: ChannelOptionsViewModel = hiltViewModel()) {
+fun ChannelOptionsDialog(
+    channelId: Long,
+    onDismiss: () -> Unit,
+    list: ChannelList? = null,
+    /** Called when Hide took the channel out of the list behind the menu. */
+    onHidden: () -> Unit = {},
+    viewModel: ChannelOptionsViewModel = hiltViewModel(),
+) {
     LaunchedEffect(channelId) { viewModel.open(channelId) }
     val options by viewModel.options.collectAsStateWithLifecycle()
     var naming by remember { mutableStateOf(false) }
@@ -64,10 +73,23 @@ fun ChannelOptionsDialog(channelId: Long, onDismiss: () -> Unit, viewModel: Chan
             }
             else -> {
                 OptionRow("Favourites", mark = if (current.favorite) "★" else null, focusFirst = true, onClick = viewModel::toggleFavorite)
-                current.lists.forEach { list ->
-                    OptionRow(list.title, mark = if (list.contains) "✓" else null) { viewModel.toggleList(list.id) }
+                current.lists.forEach { option ->
+                    OptionRow(option.title, mark = if (option.contains) "✓" else null) { viewModel.toggleList(option.id) }
                 }
                 OptionRow("New category…") { naming = true }
+                if (list == ChannelList.Favorites || list is ChannelList.Custom) {
+                    OptionRow("Move up") { viewModel.move(list, up = true) }
+                    OptionRow("Move down") { viewModel.move(list, up = false) }
+                }
+                if (current.hidden) {
+                    OptionRow("Show in lists again", mark = "Hidden", onClick = viewModel::toggleHidden)
+                } else {
+                    OptionRow("Hide channel") {
+                        viewModel.toggleHidden()
+                        onHidden()
+                        onDismiss()
+                    }
+                }
             }
         }
     }
@@ -162,9 +184,9 @@ private fun OptionsDialog(title: String, onDismiss: () -> Unit, content: @Compos
 @Composable
 private fun OptionRow(
     title: String,
+    modifier: Modifier = Modifier,
     mark: String? = null,
     focusFirst: Boolean = false,
-    modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val focus = remember { FocusRequester() }
