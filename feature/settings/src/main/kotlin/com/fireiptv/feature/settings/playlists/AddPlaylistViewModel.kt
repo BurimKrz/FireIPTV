@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.fireiptv.core.data.backup.BackupException
 import com.fireiptv.core.data.backup.BackupRepository
 import com.fireiptv.core.data.playlist.PlaylistRepository
+import com.fireiptv.core.data.playlist.xtreamPlaylistUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +16,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import javax.inject.Inject
 
 data class AddPlaylistUiState(
+    val serverError: String? = null,
+    val usernameError: String? = null,
+    val passwordError: String? = null,
     val urlError: String? = null,
     val saving: Boolean = false,
     /** Set once the playlist is saved and its import has started. */
@@ -48,17 +52,41 @@ class AddPlaylistViewModel @Inject constructor(
         }
     }
 
-    fun submit(name: String, url: String) {
+    /** An Xtream login, imported through the Xtream API (live channels only). */
+    fun submitXtream(server: String, username: String, password: String) {
+        if (_uiState.value.saving) return
+        val user = username.trim()
+        val pass = password.trim()
+        val url = xtreamPlaylistUrl(server, user, pass)
+        _uiState.update {
+            it.copy(
+                serverError = when {
+                    server.isBlank() -> "Enter the server, e.g. http://provider.com:8080"
+                    url == null && user.isNotEmpty() && pass.isNotEmpty() -> "That isn't a server address"
+                    else -> null
+                },
+                usernameError = if (user.isEmpty()) "Enter the username" else null,
+                passwordError = if (pass.isEmpty()) "Enter the password" else null,
+            )
+        }
+        if (url == null) return
+        save(name = "", url = url)
+    }
+
+    /** Any other playlist, by its M3U link. A get.php link still goes through the Xtream API. */
+    fun submitM3u(name: String, url: String) {
         if (_uiState.value.saving) return
         val cleanUrl = url.trim()
-
         val urlError = if (cleanUrl.toHttpUrlOrNull() == null) "Enter an http:// or https:// playlist URL" else null
         _uiState.update { it.copy(urlError = urlError) }
         if (urlError != null) return
+        save(name.trim(), cleanUrl)
+    }
 
+    private fun save(name: String, url: String) {
         _uiState.update { it.copy(saving = true) }
         viewModelScope.launch {
-            repository.addPlaylist(name.trim(), cleanUrl)
+            repository.addPlaylist(name, url)
             _uiState.update { it.copy(saving = false, added = true) }
         }
     }

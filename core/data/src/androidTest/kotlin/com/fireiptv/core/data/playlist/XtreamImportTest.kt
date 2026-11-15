@@ -112,6 +112,17 @@ class XtreamImportTest {
     }
 
     @Test
+    fun importsALoginTypedOnTheAddScreen() = runTest {
+        // The add screen sends the server as typed, without http:// and with a trailing slash.
+        val typed = server.url("/").toString().removePrefix("http://")
+        val url = checkNotNull(xtreamPlaylistUrl(typed, "user", "pass"))
+        val id = db.playlistDao().insert(PlaylistEntity(name = "Provider", url = url))
+
+        assertEquals(ImportOutcome.Imported(channels = 3, groups = 2, skippedLines = 0), importer.import(id))
+        assertEquals(server.url("/live/user/pass/101.ts").toString(), channels(id)[0].streamUrl)
+    }
+
+    @Test
     fun usesHlsWhenTheLinkAsksForIt() = runTest {
         val id = addPlaylist(output = "m3u8")
         importer.import(id)

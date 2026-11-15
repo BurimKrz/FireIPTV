@@ -16,11 +16,11 @@ The app appears as **FireIPTV** under **Apps**.
 
 ## First start
 
-The first screen asks for a playlist: your provider's `get.php` link or any M3U URL. A `get.php` link is imported through the Xtream API, which sends live channels only (about 0.7 MB instead of the full list with movies and series).
+The first screen asks for your provider's Xtream login: **Server** (e.g. `http://provider.com:8080`, `http://` may be left out), **Username** and **Password** (hidden; **Show password** to check it). The Xtream API sends live channels only, about 0.7 MB instead of the full list with movies and series. For any other playlist, **Use an M3U link instead** takes a link; a provider's `get.php` link there is read as an Xtream login too.
 
 Reinstalled? Press **Restore from backup** on that screen instead: it brings back the playlist, favourites, your categories, hidden groups and channels, and settings (see [Backup](#backup)).
 
-Typing a long link with the remote is slow; from a PC with adb you can send it:
+Typing with the remote is slow; from a PC with adb you can send the provider's `get.php` link, which fills in the login (or an M3U link, which opens the M3U form):
 
 ```bash
 adb shell "am start -n com.fireiptv.player/.MainActivity --es playlist_url 'http://example.com/get.php?username=...&password=...'"
