@@ -16,6 +16,8 @@ import javax.inject.Inject
 data class PlaylistsUiState(
     val loading: Boolean = true,
     val playlists: List<PlaylistSummary> = emptyList(),
+    /** The playlist home shows. */
+    val activeId: Long? = null,
     val importState: ImportState = ImportState.Idle,
 )
 
@@ -25,12 +27,16 @@ class PlaylistsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val uiState: StateFlow<PlaylistsUiState> =
-        combine(repository.playlists, repository.importState) { playlists, importState ->
-            PlaylistsUiState(loading = false, playlists = playlists, importState = importState)
+        combine(repository.playlists, repository.activePlaylist, repository.importState) { playlists, active, importState ->
+            PlaylistsUiState(loading = false, playlists = playlists, activeId = active?.id, importState = importState)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), PlaylistsUiState())
 
     fun refresh(playlistId: Long) {
         repository.refresh(playlistId)
+    }
+
+    fun use(playlistId: Long) {
+        viewModelScope.launch { repository.setActive(playlistId) }
     }
 
     fun delete(playlistId: Long) {

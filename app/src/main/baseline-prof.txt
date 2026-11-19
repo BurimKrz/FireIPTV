@@ -1,0 +1,19 @@
+# Baseline Profile: code compiled ahead of time when the app is installed, instead of being
+# interpreted until the JIT warms up. It makes the first start, the first scroll through a list
+# and the first zap faster. Compose and other AndroidX libraries bring their own profiles.
+#
+# The app's own code.
+HSPLcom/fireiptv/**;->**(**)**
+Lcom/fireiptv/**;
+# The player: opening a stream, reading MPEG-TS and HLS, decoding.
+HSPLandroidx/media3/**;->**(**)**
+Landroidx/media3/**;
+# Networking and the database behind every list.
+HSPLokhttp3/**;->**(**)**
+Lokhttp3/**;
+HSPLokio/**;->**(**)**
+Lokio/**;
+HSPLandroidx/room/**;->**(**)**
+Landroidx/room/**;
+HSPLandroidx/paging/**;->**(**)**
+Landroidx/paging/**;

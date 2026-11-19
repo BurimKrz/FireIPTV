@@ -27,7 +27,7 @@ class GroupsViewModel @Inject constructor(
     private val channelRepository: ChannelRepository,
 ) : ViewModel() {
 
-    private val playlistId = playlistRepository.playlists.map { it.firstOrNull()?.id }.distinctUntilChanged()
+    private val playlistId = playlistRepository.activePlaylist.map { it?.id }.distinctUntilChanged()
 
     val uiState: StateFlow<GroupsUiState> = playlistId
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else channelRepository.groupSettings(id) }

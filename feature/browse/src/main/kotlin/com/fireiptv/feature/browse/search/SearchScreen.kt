@@ -53,8 +53,9 @@ import com.fireiptv.feature.browse.options.ChannelOptionsDialog
 import androidx.compose.material3.Text as FieldText
 
 /**
- * Search by channel name. Results follow the typing; OK plays one (Up/Down then zaps its group),
- * long-press OK opens favourite and category choices, Menu (☰) toggles a favourite.
+ * Search by channel name, always across every channel: hidden groups and hidden channels too,
+ * marked as hidden. Results follow the typing; OK plays one (Up/Down then zaps its group),
+ * long-press OK opens favourite, category and hide choices, Menu (☰) toggles a favourite.
  */
 @Composable
 fun SearchScreen(
@@ -190,10 +191,11 @@ private fun ResultItem(
         supportingContent = result.groupTitle?.let { title ->
             { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = groupIndent)) }
         },
-        trailingContent = if (result.favorite) {
-            { Text("★") }
-        } else {
-            null
+        trailingContent = when {
+            result.hidden && result.favorite -> { { Text("Hidden ★") } }
+            result.hidden -> { { Text("Hidden") } }
+            result.favorite -> { { Text("★") } }
+            else -> null
         },
         modifier = modifier
             .fillMaxWidth()

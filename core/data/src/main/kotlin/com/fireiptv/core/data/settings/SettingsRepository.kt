@@ -6,14 +6,17 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.fireiptv.core.data.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import java.io.IOException
@@ -45,6 +48,16 @@ class SettingsRepository @Inject constructor(
         .map { it[LOGOS_ENABLED] ?: true }
         .stateIn(scope, SharingStarted.Eagerly, true)
 
+    /**
+     * The playlist home shows, or null for the first one. A plain flow, not a state with a default,
+     * so home doesn't flash the first playlist before the saved choice is read.
+     */
+    val activePlaylistId: Flow<Long?> = prefs.map { it[ACTIVE_PLAYLIST] }.distinctUntilChanged()
+
+    suspend fun setActivePlaylistId(id: Long) {
+        store.edit { it[ACTIVE_PLAYLIST] = id }
+    }
+
     suspend fun setStartMode(mode: StartMode) {
         store.edit { it[START_MODE] = mode.name }
     }
@@ -56,5 +69,6 @@ class SettingsRepository @Inject constructor(
     private companion object {
         val START_MODE = stringPreferencesKey("start_mode")
         val LOGOS_ENABLED = booleanPreferencesKey("logos_enabled")
+        val ACTIVE_PLAYLIST = longPreferencesKey("active_playlist")
     }
 }

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lint runs on CI with warnings as errors. Checks listed here don't apply to a sideloaded app for
+     one Fire TV Stick, or depend on what was published today (CI would fail without a code change). -->
+<lint>
+    <!-- Version checks: dependency updates are a deliberate step, not a build failure. -->
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="NewerVersionAvailable" severity="ignore" />
+    <issue id="OldTargetApi" severity="ignore" />
+    <!-- Fire TV only: no ChromeOS, landscape always, no cloud backup (allowBackup="false"). -->
+    <issue id="ChromeOsAbiSupport" severity="ignore" />
+    <issue id="DiscouragedApi" severity="ignore" />
+    <issue id="DataExtractionRules" severity="ignore" />
+    <!-- Restore reads one backup image; Android 14's "selected photos" answer covers it too. -->
+    <issue id="SelectedPhotoAccess" severity="ignore" />
+    <!-- The launcher banner is drawn once, at 320×180 as Fire TV asks. -->
+    <issue id="VectorRaster" severity="ignore" />
+</lint>

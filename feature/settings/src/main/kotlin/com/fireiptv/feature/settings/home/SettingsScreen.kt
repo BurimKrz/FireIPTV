@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import android.content.ActivityNotFoundException
+import com.fireiptv.feature.settings.backup.rememberRestoreAction
 import android.text.format.DateUtils
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -20,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -34,12 +36,12 @@ import java.text.DateFormat
 import java.time.YearMonth
 import java.time.format.TextStyle
 import java.util.Date
-import java.util.Locale
 
 @Composable
 fun SettingsScreen(
     onOpenPlaylists: () -> Unit,
     onOpenGroups: () -> Unit,
+    onOpenHiddenChannels: () -> Unit,
     onOpenAccount: () -> Unit,
     onOpenLog: () -> Unit,
     appVersion: String,
@@ -49,7 +51,10 @@ fun SettingsScreen(
     val update by viewModel.update.collectAsStateWithLifecycle()
     val log by viewModel.log.collectAsStateWithLifecycle()
     val usage by viewModel.usage.collectAsStateWithLifecycle()
+    val backup by viewModel.backup.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val locale = LocalConfiguration.current.locales[0]
+    val restore = rememberRestoreAction(viewModel::restore)
     var installError by remember { mutableStateOf<String?>(null) }
     // Back from Playlists, Account or Groups lands on the row that opened it, not on the first row.
     var lastRow by rememberSaveable { mutableIntStateOf(ROW_PLAYLISTS) }
@@ -100,6 +105,16 @@ fun SettingsScreen(
             modifier = rowModifier.focusRequester(rows[ROW_GROUPS]),
         )
         SettingRow(
+            title = "Hidden channels",
+            detail = when (state.hiddenChannelCount) {
+                0 -> "None. Long-press OK on a channel to hide it; search still finds hidden channels."
+                1 -> "1 channel hidden. OK to show it again."
+                else -> "${state.hiddenChannelCount} channels hidden. OK to show them again."
+            },
+            onClick = { open(ROW_HIDDEN, onOpenHiddenChannels) },
+            modifier = rowModifier.focusRequester(rows[ROW_HIDDEN]),
+        )
+        SettingRow(
             title = "Channel start: " + if (state.startMode == StartMode.FAST) "Fast" else "Stable",
             detail = if (state.startMode == StartMode.FAST) {
                 "Channels start as soon as possible; on weak Wi-Fi they may pause. OK to switch to Stable."
@@ -121,10 +136,26 @@ fun SettingsScreen(
         )
         SettingRow(
             title = "Data used: ${dataSize(usage.todayBytes)} today",
-            detail = "${dataSize(usage.monthBytes)} in ${YearMonth.now().month.getDisplayName(TextStyle.FULL, Locale.getDefault())}: " +
+            detail = "${dataSize(usage.monthBytes)} in ${YearMonth.now().month.getDisplayName(TextStyle.FULL, locale)}: " +
                 "everything the app downloaded, counted by the system with no extra requests.",
             onClick = { open(ROW_DATA, viewModel::refreshUsage) },
             modifier = rowModifier.focusRequester(rows[ROW_DATA]),
+        )
+        SettingRow(
+            title = "Back up",
+            detail = backupDetail(backup, restoreRow = false)
+                ?: ("Saves favourites, your categories, hidden groups and channels, settings and the " +
+                    "playlist login to ${viewModel.backupLocation}, where it survives a reinstall."),
+            onClick = { open(ROW_BACKUP, viewModel::backUp) },
+            modifier = rowModifier.focusRequester(rows[ROW_BACKUP]),
+        )
+        SettingRow(
+            title = "Restore",
+            detail = backupDetail(backup, restoreRow = true)
+                ?: ("Loads ${viewModel.backupLocation} back, adding to what is here. With no playlist yet, " +
+                    "it adds the saved one first."),
+            onClick = { open(ROW_RESTORE, restore) },
+            modifier = rowModifier.focusRequester(rows[ROW_RESTORE]),
         )
         val (updateTitle, updateDetail) = updateText(update, viewModel.installedVersion)
         SettingRow(
@@ -157,6 +188,13 @@ fun SettingsScreen(
             modifier = Modifier.padding(top = 24.dp, start = 16.dp),
         )
     }
+}
+
+/** The last Back up or Restore result, on the row that ran it. */
+private fun backupDetail(status: BackupStatus, restoreRow: Boolean): String? = when {
+    status.restore != restoreRow -> null
+    status.running -> if (restoreRow) "Restoring… (a new playlist loads first)" else "Saving…"
+    else -> status.message
 }
 
 private fun updateText(update: UpdateState, installed: String): Pair<String, String> = when (update) {
@@ -196,9 +234,12 @@ private fun SettingRow(title: String, detail: String, onClick: () -> Unit, modif
 private const val ROW_PLAYLISTS = 0
 private const val ROW_ACCOUNT = 1
 private const val ROW_GROUPS = 2
-private const val ROW_START = 3
-private const val ROW_LOGOS = 4
-private const val ROW_DATA = 5
-private const val ROW_UPDATES = 6
-private const val ROW_LOG = 7
-private const val ROW_COUNT = 8
+private const val ROW_HIDDEN = 3
+private const val ROW_START = 4
+private const val ROW_LOGOS = 5
+private const val ROW_DATA = 6
+private const val ROW_BACKUP = 7
+private const val ROW_RESTORE = 8
+private const val ROW_UPDATES = 9
+private const val ROW_LOG = 10
+private const val ROW_COUNT = 11

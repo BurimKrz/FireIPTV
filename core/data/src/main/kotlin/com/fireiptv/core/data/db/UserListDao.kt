@@ -38,6 +38,7 @@ interface UserListDao {
         SELECT l.id, l.title, l.pinnedAt, (
             SELECT COUNT(*) FROM user_list_entry e WHERE e.listId = l.id
             AND EXISTS(SELECT 1 FROM channel c WHERE c.playlistId = l.playlistId AND c.streamUrl = e.streamUrl)
+            AND NOT EXISTS(SELECT 1 FROM hidden_channel hc WHERE hc.playlistId = l.playlistId AND hc.streamUrl = e.streamUrl)
         ) AS channelCount
         FROM user_list l
         WHERE l.playlistId = :playlistId
@@ -61,6 +62,9 @@ interface UserListDao {
     )
     fun observeListsWith(playlistId: Long, streamUrl: String): Flow<List<Long>>
 
+    @Query("SELECT MAX(sortOrder) FROM user_list_entry WHERE listId = :listId")
+    suspend fun lastEntrySortOrder(listId: Long): Long?
+
     @Query("SELECT sortOrder FROM user_list_entry WHERE listId = :listId AND streamUrl = :streamUrl")
     suspend fun entrySortOrder(listId: Long, streamUrl: String): Long?
 
@@ -69,7 +73,7 @@ interface UserListDao {
         SELECT c.id, c.name, c.number, c.sortOrder, c.logoUrl, $IS_FAVORITE FROM user_list_entry e
         JOIN user_list l ON l.id = e.listId
         JOIN channel c ON c.id = (SELECT MIN(id) FROM channel WHERE playlistId = l.playlistId AND streamUrl = e.streamUrl)
-        WHERE e.listId = :listId
+        WHERE e.listId = :listId AND $NOT_HIDDEN_CHANNEL
         ORDER BY e.sortOrder
         """,
     )
@@ -82,7 +86,7 @@ interface UserListDao {
         SELECT c.* FROM user_list_entry e
         JOIN user_list l ON l.id = e.listId
         JOIN channel c ON c.id = (SELECT MIN(id) FROM channel WHERE playlistId = l.playlistId AND streamUrl = e.streamUrl)
-        WHERE e.listId = :listId AND e.sortOrder > :sortOrder
+        WHERE e.listId = :listId AND e.sortOrder > :sortOrder AND $NOT_HIDDEN_CHANNEL
         ORDER BY e.sortOrder LIMIT 1
         """,
     )
@@ -93,7 +97,7 @@ interface UserListDao {
         SELECT c.* FROM user_list_entry e
         JOIN user_list l ON l.id = e.listId
         JOIN channel c ON c.id = (SELECT MIN(id) FROM channel WHERE playlistId = l.playlistId AND streamUrl = e.streamUrl)
-        WHERE e.listId = :listId AND e.sortOrder < :sortOrder
+        WHERE e.listId = :listId AND e.sortOrder < :sortOrder AND $NOT_HIDDEN_CHANNEL
         ORDER BY e.sortOrder DESC LIMIT 1
         """,
     )
@@ -104,9 +108,58 @@ interface UserListDao {
         SELECT COUNT(*) FROM user_list_entry e JOIN user_list l ON l.id = e.listId
         WHERE e.listId = :listId AND e.sortOrder < :sortOrder
         AND EXISTS(SELECT 1 FROM channel c WHERE c.playlistId = l.playlistId AND c.streamUrl = e.streamUrl)
+        AND $ENTRY_NOT_HIDDEN
         """,
     )
     suspend fun entryPosition(listId: Long, sortOrder: Long): Int
+
+    // Reordering, like LibraryDao.moveFavorite: trade places with the next entry shown.
+
+    @Query(
+        """
+        SELECT e.* FROM user_list_entry e JOIN user_list l ON l.id = e.listId
+        WHERE e.listId = :listId AND e.sortOrder < :sortOrder
+        AND EXISTS(SELECT 1 FROM channel c WHERE c.playlistId = l.playlistId AND c.streamUrl = e.streamUrl)
+        AND $ENTRY_NOT_HIDDEN
+        ORDER BY e.sortOrder DESC LIMIT 1
+        """,
+    )
+    suspend fun entryShownAbove(listId: Long, sortOrder: Long): UserListEntryEntity?
+
+    @Query(
+        """
+        SELECT e.* FROM user_list_entry e JOIN user_list l ON l.id = e.listId
+        WHERE e.listId = :listId AND e.sortOrder > :sortOrder
+        AND EXISTS(SELECT 1 FROM channel c WHERE c.playlistId = l.playlistId AND c.streamUrl = e.streamUrl)
+        AND $ENTRY_NOT_HIDDEN
+        ORDER BY e.sortOrder LIMIT 1
+        """,
+    )
+    suspend fun entryShownBelow(listId: Long, sortOrder: Long): UserListEntryEntity?
+
+    @Query("UPDATE user_list_entry SET sortOrder = :sortOrder WHERE listId = :listId AND streamUrl = :streamUrl")
+    suspend fun setEntrySortOrder(listId: Long, streamUrl: String, sortOrder: Long)
+
+    /** Moves a channel one place up or down in its category; returns false at either end. */
+    @Transaction
+    suspend fun moveEntry(listId: Long, streamUrl: String, up: Boolean): Boolean {
+        val own = entrySortOrder(listId, streamUrl) ?: return false
+        val other = (if (up) entryShownAbove(listId, own) else entryShownBelow(listId, own)) ?: return false
+        setEntrySortOrder(listId, streamUrl, other.sortOrder)
+        setEntrySortOrder(listId, other.streamUrl, own)
+        return true
+    }
+
+    // Backup and restore.
+
+    @Query("SELECT * FROM user_list WHERE playlistId = :playlistId ORDER BY createdAt")
+    suspend fun lists(playlistId: Long): List<UserListEntity>
+
+    @Query("SELECT * FROM user_list_entry WHERE listId = :listId ORDER BY sortOrder")
+    suspend fun entries(listId: Long): List<UserListEntryEntity>
+
+    @Query("SELECT id FROM user_list WHERE playlistId = :playlistId AND title = :title LIMIT 1")
+    suspend fun listNamed(playlistId: Long, title: String): Long?
 
     // After an import, like LibraryDao.relinkAfterImport: entries take their channel's current
     // name, and an entry whose URL is gone moves to a channel with the same name, if there is one.
@@ -142,3 +195,7 @@ interface UserListDao {
         relinkEntriesByName(playlistId)
     }
 }
+
+/** Category entry `e` (in list `l`) is not a channel the user hid. */
+internal const val ENTRY_NOT_HIDDEN =
+    "NOT EXISTS(SELECT 1 FROM hidden_channel hc WHERE hc.playlistId = l.playlistId AND hc.streamUrl = e.streamUrl)"

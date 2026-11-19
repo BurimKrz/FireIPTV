@@ -53,6 +53,8 @@ data class ReturnTarget(val channelId: Long, val index: Int)
 data class BrowseUiState(
     val loading: Boolean = true,
     val playlist: PlaylistSummary? = null,
+    /** Every playlist, for the switcher at the top. */
+    val playlists: List<PlaylistSummary> = emptyList(),
     val groups: List<GroupRow> = emptyList(),
     val selectedList: ChannelList = ChannelList.All,
     val importState: ImportState = ImportState.Idle,
@@ -63,7 +65,7 @@ data class BrowseUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class BrowseViewModel @Inject constructor(
-    playlistRepository: PlaylistRepository,
+    private val playlistRepository: PlaylistRepository,
     private val channelRepository: ChannelRepository,
     updateRepository: UpdateRepository,
 ) : ViewModel() {
@@ -73,8 +75,8 @@ class BrowseViewModel @Inject constructor(
         .map { it is UpdateState.Available || it is UpdateState.Ready }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    // v1 browses one playlist: the first one added.
-    private val playlist = playlistRepository.playlists.map { it.firstOrNull() }
+    // Home browses one playlist at a time: the one picked with the Playlists button.
+    private val playlist = playlistRepository.activePlaylist
 
     // Counts in the summary change on every import batch; the lists below only restart on a new id.
     private val playlistId = playlist.map { it?.id }.distinctUntilChanged()
@@ -105,7 +107,15 @@ class BrowseViewModel @Inject constructor(
     }.shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
 
     init {
-        viewModelScope.launch { playlistId.collect { id -> if (id != null) channelRepository.trimRecents(id) } }
+        viewModelScope.launch {
+            var previous: Long? = null
+            playlistId.collect { id ->
+                // Groups and categories belong to one playlist: after a switch, start from all channels.
+                if (previous != null && id != previous) selectedList.value = ChannelList.All
+                previous = id
+                if (id != null) channelRepository.trimRecents(id)
+            }
+        }
     }
 
     init {
@@ -118,8 +128,13 @@ class BrowseViewModel @Inject constructor(
         }
     }
 
-    val channels: Flow<PagingData<ChannelRow>> = combine(playlistId, selectedList, ::Pair)
-        .flatMapLatest { (playlistId, list) ->
+    // The list open during an import isn't always told when it ends (seen on the first import:
+    // "All channels · 22" over an empty list), so a finished import restarts it.
+    private val playlistSync = playlist.map { it?.id to it?.lastSync }.distinctUntilChanged()
+
+    val channels: Flow<PagingData<ChannelRow>> = combine(playlistSync, selectedList, ::Pair)
+        .flatMapLatest { (sync, list) ->
+            val playlistId = sync.first
             if (playlistId == null) {
                 flowOf(PagingData.empty())
             } else {
@@ -129,10 +144,12 @@ class BrowseViewModel @Inject constructor(
         .cachedIn(viewModelScope)
 
     val uiState: StateFlow<BrowseUiState> =
-        combine(playlist, groups, selectedList, playlistRepository.importState) { playlist, groups, selected, import ->
+        combine(playlist, playlistRepository.playlists, groups, selectedList, playlistRepository.importState) {
+                playlist, playlists, groups, selected, import ->
             BrowseUiState(
                 loading = false,
                 playlist = playlist,
+                playlists = playlists,
                 groups = groups,
                 selectedList = selected,
                 importState = import,
@@ -145,6 +162,10 @@ class BrowseViewModel @Inject constructor(
         val channel = channelRepository.channel(id) ?: return null
         val index = channelRepository.position(channel, selectedList.value) ?: return null
         return ReturnTarget(id, index)
+    }
+
+    fun usePlaylist(playlistId: Long) {
+        viewModelScope.launch { playlistRepository.setActive(playlistId) }
     }
 
     fun select(list: ChannelList) {

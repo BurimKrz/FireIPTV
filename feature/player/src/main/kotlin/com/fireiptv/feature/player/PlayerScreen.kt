@@ -24,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -46,6 +48,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.compose.ContentFrame
 import androidx.paging.compose.LazyPagingItems
 import androidx.paging.compose.collectAsLazyPagingItems
@@ -58,10 +62,13 @@ import com.fireiptv.core.ui.ChannelLogo
 
 /**
  * Full-screen live TV. Up/Down zap through the list the channel was opened from (CH+/CH- too),
- * Left/Right open that list at the side, OK shows the banner (or retries a failed channel),
+ * Left/Right open that list at the side, OK shows the banner (or retries a failed channel; when
+ * the failed channel has other versions, Up/Down pick one of them or Try again instead),
  * Menu (☰) adds or removes a favourite, Play/Pause stops and restarts the stream, Fast-forward (⏩)
  * sets the sleep timer, Back returns to the list.
  */
+// ContentFrame's keepContentOnReset is marked unstable in Media3.
+@OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -80,6 +87,11 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
     LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onForeground() }
 
     val panelOpen = state.panel != null
+    // A failed channel's choices: 0 is Try again, then its other versions. The first other
+    // version is picked to start with, so one OK switches to it.
+    val versions = state.otherVersions
+    val choosing = state.status is PlaybackStatus.Failed && versions.isNotEmpty() && !panelOpen
+    var choice by remember(versions) { mutableIntStateOf(if (versions.isEmpty()) 0 else 1) }
     BackHandler(enabled = panelOpen) { viewModel.closePanel() }
     // Focus comes back to the picture when the panel closes, so Up/Down zap again.
     LaunchedEffect(panelOpen) { if (!panelOpen) focus.requestFocus() }
@@ -94,6 +106,15 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
             .onPreviewKeyEvent { event -> event.type == KeyEventType.KeyDown && viewModel.onKey() }
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                if (choosing) {
+                    when (event.key) {
+                        Key.DirectionUp -> choice = (choice - 1).coerceAtLeast(0)
+                        Key.DirectionDown -> choice = (choice + 1).coerceAtMost(versions.size)
+                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter ->
+                            if (choice == 0) viewModel.retry() else viewModel.playVersion(versions[choice - 1].id)
+                        else -> null
+                    }?.let { return@onKeyEvent true }
+                }
                 if (event.key == Key.DirectionLeft || event.key == Key.DirectionRight) {
                     viewModel.togglePanel()
                     return@onKeyEvent true
@@ -130,7 +151,14 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
                     .size(40.dp),
             )
         }
-        if (status is PlaybackStatus.Failed || state.missing) {
+        if (status is PlaybackStatus.Failed && !state.missing && versions.isNotEmpty()) {
+            VersionsMessage(
+                reason = state.accountNote ?: status.message,
+                versions = versions,
+                choice = choice,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        } else if (status is PlaybackStatus.Failed || state.missing) {
             Message(
                 title = if (state.missing) "This channel is gone" else "Can't play this channel",
                 body = if (state.missing) {
@@ -286,6 +314,42 @@ private fun ChannelPanel(
                         modifier = if (channel.id == panel.currentId) Modifier.focusRequester(current) else Modifier,
                     )
                 }
+            }
+        }
+    }
+}
+
+/** A failed channel with other versions: Try again, or one of them, picked with Up/Down. */
+@Composable
+private fun VersionsMessage(reason: String, versions: List<OtherVersion>, choice: Int, modifier: Modifier = Modifier) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier
+            .widthIn(max = 720.dp)
+            .background(Color.Black.copy(alpha = 0.75f), MaterialTheme.shapes.medium)
+            .padding(24.dp),
+    ) {
+        Text("Can't play this channel", style = MaterialTheme.typography.titleLarge, color = Color.White)
+        Text(reason, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.8f))
+        Text(
+            "Other versions of it below: Up/Down to choose, OK to play. Left/Right for the channel list.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.8f),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 8.dp)) {
+            (listOf("Try again") + versions.map { it.name }).forEachIndexed { index, label ->
+                val picked = index == choice
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (picked) Color.Black else Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(if (picked) Color.White else Color.Transparent, MaterialTheme.shapes.small)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                )
             }
         }
     }

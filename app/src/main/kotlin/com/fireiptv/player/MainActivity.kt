@@ -33,6 +33,7 @@ import com.fireiptv.feature.player.PlayerScreen
 import com.fireiptv.feature.player.PlayerViewModel
 import com.fireiptv.feature.settings.account.AccountScreen
 import com.fireiptv.feature.settings.groups.GroupsScreen
+import com.fireiptv.feature.settings.hidden.HiddenChannelsScreen
 import com.fireiptv.feature.settings.home.SettingsScreen
 import com.fireiptv.feature.settings.log.LogScreen
 import com.fireiptv.feature.settings.playlists.AddPlaylistScreen
@@ -104,6 +105,7 @@ private object Routes {
     const val SEARCH = "search"
     const val SETTINGS = "settings"
     const val GROUPS = "settings/groups"
+    const val HIDDEN_CHANNELS = "settings/hidden"
     const val ACCOUNT = "settings/account"
     const val LOG = "settings/log"
     const val PLAYER = "player/{${PlayerViewModel.ARG_CHANNEL_ID}}?list={${PlayerViewModel.ARG_LIST}}"
@@ -149,6 +151,7 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
             SettingsScreen(
                 onOpenPlaylists = { navController.navigate(Routes.PLAYLISTS) },
                 onOpenGroups = { navController.navigate(Routes.GROUPS) },
+                onOpenHiddenChannels = { navController.navigate(Routes.HIDDEN_CHANNELS) },
                 onOpenAccount = { navController.navigate(Routes.ACCOUNT) },
                 onOpenLog = { navController.navigate(Routes.LOG) },
                 appVersion = BuildConfig.VERSION_NAME,
@@ -156,6 +159,9 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
         }
         composable(Routes.GROUPS) {
             GroupsScreen()
+        }
+        composable(Routes.HIDDEN_CHANNELS) {
+            HiddenChannelsScreen()
         }
         composable(Routes.ACCOUNT) {
             AccountScreen()

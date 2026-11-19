@@ -30,6 +30,8 @@ data class SearchResult(
     val logoUrl: String?,
     val groupTitle: String?,
     val favorite: Boolean,
+    /** Hidden from the lists by the user; search still finds it. */
+    val hidden: Boolean,
     /** The list Up/Down zaps through when this result is played: its group. */
     val zapList: ChannelList,
 )
@@ -50,7 +52,7 @@ class SearchViewModel @Inject constructor(
 ) : ViewModel() {
 
     private val query = savedState.getStateFlow(KEY_QUERY, "")
-    private val playlistId = playlistRepository.playlists.map { it.firstOrNull()?.id }.distinctUntilChanged()
+    private val playlistId = playlistRepository.activePlaylist.map { it?.id }.distinctUntilChanged()
 
     // Searching waits for typing to pause, so each key press on the remote keyboard doesn't query.
     private val results = combine(playlistId, query.debounce(SEARCH_DELAY_MS)) { id, text -> id to text }
@@ -67,6 +69,7 @@ class SearchViewModel @Inject constructor(
                             logoUrl = it.logoUrl,
                             groupTitle = it.groupTitle,
                             favorite = it.favorite,
+                            hidden = it.hidden,
                             zapList = it.groupId?.let { group -> ChannelList.Group(group) } ?: ChannelList.All,
                         )
                     }

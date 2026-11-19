@@ -1,4 +1,4 @@
-# Every push to dev and every pull request: does it build, and do the JVM tests pass?
+# Every push to dev and every pull request: does it build, is lint clean, and do the JVM tests pass?
 # The release build here is unsigned (no secrets on pull requests); release.yml signs tagged builds.
 name: CI
 
@@ -24,4 +24,4 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
 
       - name: Build and test
-        run: ./gradlew :core:parser:test :app:assembleDebug :app:assembleRelease
+        run: ./gradlew :core:parser:test lintDebug :app:assembleDebug :app:assembleRelease
