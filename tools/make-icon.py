@@ -1,68 +1,88 @@
-"""Draws the FireIPTV icon and banner: shapes in one place -> PNG previews (Pillow) + Android vector drawables.
+"""Draws the FireIPTV wordmark icons: "Fire" in orange-red, "IPTV" in white.
 
-Usage: python3 tools/make-icon.py OUTDIR, then copy ic_launcher.xml to core/ui/src/main/res/drawable/
-and banner.xml to app/src/main/res/drawable/. Preview PNG corners show small nicks; Android draws them clean.
+Letters come from a font's outlines (fontTools), so the drawables are plain vector paths.
+Writes:
+  core/ui/src/main/res/drawable/ic_launcher.xml   square app icon, "Fire" over "IPTV"
+  core/ui/src/main/res/drawable/wordmark.xml      one-line wordmark, no background (home header)
+  app/src/main/res/drawable/banner.xml            Fire TV launcher banner, one line
+and PNG previews (Pillow) of each into OUTDIR.
+
+Usage: PYTHONPATH=<dir with fonttools> python3 tools/make-icon.py OUTDIR [FONT [FONT_INDEX]] [--write]
+Default font: DejaVu Sans Bold (fonts-dejavu-core). Without --write it only makes the previews.
 """
-import re, sys
-from PIL import Image, ImageDraw
+import os, re, sys
+from fontTools.ttLib import TTFont, TTCollection
+from fontTools.pens.basePen import BasePen
+from PIL import Image, ImageChops, ImageDraw
 
-def rrect(x0, y0, x1, y1, r):
-    k = r * 0.5523
-    return (f"M{x0+r},{y0} L{x1-r},{y0} C{x1-r+k},{y0} {x1},{y0+r-k} {x1},{y0+r} "
-            f"L{x1},{y1-r} C{x1},{y1-r+k} {x1-r+k},{y1} {x1-r},{y1} L{x0+r},{y1} "
-            f"C{x0+r-k},{y1} {x0},{y1-r+k} {x0},{y1-r} L{x0},{y0+r} C{x0},{y0+r-k} {x0+r-k},{y0} {x0+r},{y0} Z")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+FIRE = ("#FFFFA726", "#FFFF3D1F")   # orange at the top, red at the bottom
+IPTV = "#FFF2F3F7"
+BG = ("#FF23263A", "#FF0B0C11")
 
-def flame(cx, top, base, w):
-    # outer flame, w = half width; scaled from a 0..1 design
-    s = (base - top) / 33.0
-    def P(x, y): return f"{cx + x*s:.2f},{top + y*s:.2f}"
-    return ("M" + P(0, 0) +
-            " C" + P(3, 7) + " " + P(12.5, 11.5) + " " + P(12.5, 21.5) +
-            " C" + P(12.5, 28.5) + " " + P(7, 33) + " " + P(0, 33) +
-            " C" + P(-7, 33) + " " + P(-12.5, 28.5) + " " + P(-12.5, 21.5) +
-            " C" + P(-12.5, 15.5) + " " + P(-9, 11.5) + " " + P(-5.5, 8) +
-            " C" + P(-5.5, 12.5) + " " + P(-4, 15) + " " + P(-1.5, 16) +
-            " C" + P(-3, 10) + " " + P(-2.5, 4.5) + " " + P(0, 0) + " Z")
+class PathPen(BasePen):
+    """Records a glyph as an M/L/C/Z path string, flipped to y-down and placed at (dx, base)."""
+    def __init__(self, glyphset, scale, dx, base):
+        super().__init__(glyphset); self.d = []; self.s, self.dx, self.base = scale, dx, base
+    def p(self, pt): return f"{self.dx + pt[0]*self.s:.2f},{self.base - pt[1]*self.s:.2f}"
+    def _moveTo(self, pt): self.d.append("M" + self.p(pt))
+    def _lineTo(self, pt): self.d.append("L" + self.p(pt))
+    def _curveToOne(self, a, b, c): self.d.append("C" + " ".join(map(self.p, (a, b, c))))
+    def _qCurveToOne(self, a, b):
+        p0 = self._getCurrentPoint()
+        c1 = (p0[0] + 2/3*(a[0]-p0[0]), p0[1] + 2/3*(a[1]-p0[1]))
+        c2 = (b[0] + 2/3*(a[0]-b[0]), b[1] + 2/3*(a[1]-b[1]))
+        self._curveToOne(c1, c2, b)
+    def _closePath(self): self.d.append("Z")
+    def _endPath(self): pass
 
-def inner(cx, top, base):
-    s = (base - top) / 17.0
-    def P(x, y): return f"{cx + x*s:.2f},{top + y*s:.2f}"
-    return ("M" + P(0, 0) +
-            " C" + P(2.5, 4) + " " + P(6.5, 6.5) + " " + P(6.5, 11) +
-            " C" + P(6.5, 14.5) + " " + P(3.6, 17) + " " + P(0, 17) +
-            " C" + P(-3.6, 17) + " " + P(-6.5, 14.5) + " " + P(-6.5, 11) +
-            " C" + P(-6.5, 7.5) + " " + P(-4, 5) + " " + P(-2.5, 3.5) +
-            " C" + P(-2, 5.5) + " " + P(-1, 6.5) + " " + P(0.3, 7) +
-            " C" + P(-0.5, 4.5) + " " + P(-0.5, 2) + " " + P(0, 0) + " Z")
+class Font:
+    def __init__(self, path, index=0):
+        self.f = TTCollection(path).fonts[index] if path.endswith(".ttc") else TTFont(path)
+        self.gs = self.f.getGlyphSet(); self.cmap = self.f.getBestCmap()
+        self.upm = self.f["head"].unitsPerEm
+        os2 = self.f["OS/2"]; self.cap = getattr(os2, "sCapHeight", 0) or self.upm * 0.7
+    def width(self, text, track=0.0):
+        return sum(self.gs[self.cmap[ord(c)]].width for c in text) + track * self.upm * (len(text) - 1)
+    def path(self, text, size_cap, x, base, track=0.0):
+        """Text whose capitals are size_cap tall, starting at x on baseline base. Returns (path, width)."""
+        s = size_cap / self.cap; parts = []
+        for c in text:
+            g = self.gs[self.cmap[ord(c)]]
+            pen = PathPen(self.gs, s, x, base); g.draw(pen); parts += pen.d
+            x += (g.width + track * self.upm) * s
+        return " ".join(parts), self.width(text, track) * s
 
-def design(W, H, tv):
-    """tv = (x0, y0, x1, y1) of the screen; everything else follows it."""
-    x0, y0, x1, y1 = tv
-    sw = (x1 - x0) / 13.0            # stroke width
-    cx = (x0 + x1) / 2
-    r = (y1 - y0) * 0.22
-    ah = (y1 - y0) * 0.26            # antenna height
-    shapes = []
-    shapes.append(dict(d=f"M0,0 L{W},0 L{W},{H} L0,{H} Z", grad=((0, 0), (W, H), "#FF262A3A", "#FF0C0D12")))
-    # warm glow behind the screen
-    g = (x1 - x0) * 0.18
-    # antennas
-    shapes.append(dict(d=f"M{cx - (x1-x0)*0.17},{y0 - ah} L{cx},{y0 - sw*0.2} L{cx + (x1-x0)*0.17},{y0 - ah}",
-                       stroke="#FFF2F3F7", sw=sw * 0.8))
-    # screen fill + frame
-    shapes.append(dict(d=rrect(x0, y0, x1, y1, r), fill="#FF14161F"))
-    shapes.append(dict(d=rrect(x0, y0, x1, y1, r), stroke="#FFF2F3F7", sw=sw))
-    # flame
-    top, base = y0 + (y1 - y0) * 0.11, y1 - (y1 - y0) * 0.12
-    shapes.append(dict(d=flame(cx, top, base, 0), grad=((cx, top), (cx, base), "#FFFF3B30", "#FFFF9A1F")))
-    itop = base - (base - top) * 0.52
-    shapes.append(dict(d=inner(cx, itop, base - (base - top) * 0.03), grad=((cx, itop), (cx, base), "#FFFFD54A", "#FFFFF4C2")))
-    return shapes
+def wordmark(font, cap, cx, base, track):
+    """One line "Fire" + "IPTV" centred on cx."""
+    s = cap / font.cap
+    w1, w2 = font.width("Fire", track) * s, font.width("IPTV", track) * s
+    gap = track * font.upm * s
+    x = cx - (w1 + gap + w2) / 2
+    fire, _ = font.path("Fire", cap, x, base, track)
+    iptv, _ = font.path("IPTV", cap, x + w1 + gap, base, track)
+    return [dict(d=fire, grad=((cx, base - cap), (cx, base), *FIRE)), dict(d=iptv, fill=IPTV)]
+
+def background(W, H):
+    return [dict(d=f"M0,0 L{W},0 L{W},{H} L0,{H} Z", grad=((0, 0), (W, H), *BG))]
+
+def icon(font, track):
+    # Two lines: "Fire" over "IPTV", each as wide as the other allows.
+    W = 108; cap = 26
+    s = cap / font.cap
+    wf, wi = font.width("Fire", track) * s, font.width("IPTV", track) * s
+    fire, _ = font.path("Fire", cap, (W - wf) / 2, 50, track)
+    iptv, _ = font.path("IPTV", cap, (W - wi) / 2, 84, track)
+    return background(W, W) + [dict(d=fire, grad=((54, 24), (54, 50), *FIRE)), dict(d=iptv, fill=IPTV)]
+
+def fitted(font, W, H, margin, track):
+    """One-line wordmark as large as fits W wide with margin."""
+    cap = (W - 2 * margin) / ((font.width("Fire", track) + font.width("IPTV", track) + track * font.upm) / font.cap)
+    return wordmark(font, cap, W / 2, H / 2 + cap / 2, track)
 
 # ---------- preview rasterizer ----------
 def flatten(d):
-    toks = re.findall(r"[MLCZ]|-?[\d.]+", d)
-    pts, polys, i, cur, cmd = [], [], 0, (0, 0), None
+    toks = re.findall(r"[MLCZ]|-?[\d.]+", d); polys, pts, i, cur, cmd = [], [], 0, (0, 0), None
     def num():
         nonlocal i; v = float(toks[i]); i += 1; return v
     while i < len(toks):
@@ -70,85 +90,84 @@ def flatten(d):
         if t in "MLCZ":
             cmd = t; i += 1
             if t == "Z":
-                if pts: polys.append((pts, True)); pts = []
+                if pts: polys.append(pts); pts = []
                 continue
         if cmd == "M":
-            if pts: polys.append((pts, False))
+            if pts: polys.append(pts)
             cur = (num(), num()); pts = [cur]; cmd = "L"
         elif cmd == "L":
             cur = (num(), num()); pts.append(cur)
         elif cmd == "C":
-            p1 = (num(), num()); p2 = (num(), num()); p3 = (num(), num()); p0 = cur
-            for k in range(1, 25):
-                u = k / 24
+            p1, p2, p3, p0 = (num(), num()), (num(), num()), (num(), num()), cur
+            for k in range(1, 13):
+                u = k / 12
                 pts.append(tuple((1-u)**3*a + 3*(1-u)**2*u*b + 3*(1-u)*u**2*c + u**3*e for a, b, c, e in zip(p0, p1, p2, p3)))
             cur = p3
-    if pts: polys.append((pts, False))
+    if pts: polys.append(pts)
     return polys
 
-def hexc(h): h = h.lstrip("#"); return (int(h[2:4],16), int(h[4:6],16), int(h[6:8],16), int(h[0:2],16))
+def hexc(h): h = h.lstrip("#"); return (int(h[2:4], 16), int(h[4:6], 16), int(h[6:8], 16), int(h[0:2], 16))
 
 def render(shapes, W, H, scale, out):
-    S = scale * 4
-    img = Image.new("RGBA", (W*S, H*S), (0, 0, 0, 0))
+    S = scale * 4; size = (int(W*S), int(H*S)); img = Image.new("RGBA", size, (0, 0, 0, 0))
     for sh in shapes:
-        mask = Image.new("L", img.size, 0); md = ImageDraw.Draw(mask)
-        for pts, closed in flatten(sh["d"]):
-            P = [(x*S, y*S) for x, y in pts]
-            if "stroke" in sh:
-                w = int(sh["sw"]*S)
-                md.line(P + ([P[0]] if closed else []), fill=255, width=w, joint="curve")
-                for x, y in ([P[0], P[-1]] if not closed else []):
-                    md.ellipse([x-w/2, y-w/2, x+w/2, y+w/2], fill=255)
-            else:
-                md.polygon(P, fill=255)
+        mask = Image.new("L", size, 0)
+        for pts in flatten(sh["d"]):   # even-odd: holes in P, e, ...
+            m = Image.new("L", size, 0); ImageDraw.Draw(m).polygon([(x*S, y*S) for x, y in pts], fill=255)
+            mask = ImageChops.logical_xor(mask.convert("1"), m.convert("1")).convert("L")
         if "grad" in sh:
             (gx0, gy0), (gx1, gy1), c0, c1 = sh["grad"]; a, b = hexc(c0), hexc(c1)
-            layer = Image.new("RGBA", img.size); px = layer.load()
+            col = Image.linear_gradient("L").resize(size) if gx0 == gx1 else None
+            layer = Image.new("RGBA", size); px = layer.load(); bb = mask.getbbox()
             dx, dy = (gx1-gx0)*S, (gy1-gy0)*S; L2 = dx*dx + dy*dy
-            bb = mask.getbbox()
             if bb:
-                for y in range(bb[1], bb[3], 1):
-                    for x in range(bb[0], bb[2], 1):
+                for y in range(bb[1], bb[3]):
+                    for x in range(bb[0], bb[2]):
                         t = max(0, min(1, ((x-gx0*S)*dx + (y-gy0*S)*dy) / L2))
                         px[x, y] = tuple(int(a[j] + (b[j]-a[j])*t) for j in range(4))
         else:
-            layer = Image.new("RGBA", img.size, hexc(sh.get("fill") or sh["stroke"]))
-        alpha = Image.eval(mask, lambda v: v)
-        la = layer.split()[3]
-        from PIL import ImageChops
-        layer.putalpha(ImageChops.multiply(la, alpha))
+            layer = Image.new("RGBA", size, hexc(sh["fill"]))
+        layer.putalpha(ImageChops.multiply(layer.split()[3], mask))
         img = Image.alpha_composite(img, layer)
-    img.resize((W*scale, H*scale), Image.LANCZOS).save(out)
+    img.resize((int(W*scale), int(H*scale)), Image.LANCZOS).save(out)
 
 # ---------- Android vector ----------
-def vector(shapes, W, H, dp_w, dp_h):
-    out = [f'<vector xmlns:android="http://schemas.android.com/apk/res/android"',
-           f'    xmlns:aapt="http://schemas.android.com/aapt"',
-           f'    android:width="{dp_w}dp"', f'    android:height="{dp_h}dp"',
-           f'    android:viewportWidth="{W}"', f'    android:viewportHeight="{H}">']
+def vector(shapes, W, H):
+    out = ['<?xml version="1.0" encoding="utf-8"?>',
+           '<!-- Generated by tools/make-icon.py; edit that, not this. -->',
+           '<vector xmlns:android="http://schemas.android.com/apk/res/android"',
+           '    xmlns:aapt="http://schemas.android.com/aapt"',
+           f'    android:width="{W:g}dp"', f'    android:height="{H:g}dp"',
+           f'    android:viewportWidth="{W:g}"', f'    android:viewportHeight="{H:g}">']
     for sh in shapes:
-        d = re.sub(r"(\d+\.\d{2})\d+", r"\1", sh["d"])
+        d = sh["d"]
         if "grad" in sh:
             (gx0, gy0), (gx1, gy1), c0, c1 = sh["grad"]
-            out += [f'    <path android:pathData="{d}">',
+            out += [f'    <path android:fillType="evenOdd" android:pathData="{d}">',
                     '        <aapt:attr name="android:fillColor">',
-                    f'            <gradient android:type="linear" android:startX="{gx0:g}" android:startY="{gy0:g}" android:endX="{gx1:g}" android:endY="{gy1:g}"',
+                    f'            <gradient android:type="linear" android:startX="{gx0:.2f}" android:startY="{gy0:.2f}" '
+                    f'android:endX="{gx1:.2f}" android:endY="{gy1:.2f}"',
                     f'                android:startColor="{c0}" android:endColor="{c1}" />',
                     '        </aapt:attr>', '    </path>']
-        elif "stroke" in sh:
-            out.append(f'    <path android:pathData="{d}" android:strokeColor="{sh["stroke"]}" android:strokeWidth="{sh["sw"]:.2f}" '
-                       f'android:strokeLineCap="round" android:strokeLineJoin="round" />')
         else:
-            out.append(f'    <path android:pathData="{d}" android:fillColor="{sh["fill"]}" />')
+            out.append(f'    <path android:fillType="evenOdd" android:fillColor="{sh["fill"]}" android:pathData="{d}" />')
     out.append("</vector>")
     return "\n".join(out) + "\n"
 
 if __name__ == "__main__":
-    outdir = sys.argv[1]
-    icon = design(108, 108, (14, 38, 94, 90))
-    banner = design(320, 180, (92, 60, 228, 146))
-    render(icon, 108, 108, 4, f"{outdir}/icon.png")
-    render(banner, 320, 180, 2, f"{outdir}/banner.png")
-    open(f"{outdir}/ic_launcher.xml", "w").write(vector(icon, 108, 108, 108, 108))
-    open(f"{outdir}/banner.xml", "w").write(vector(banner, 320, 180, 320, 180))
+    args = [a for a in sys.argv[1:] if a != "--write"]
+    outdir = args[0]
+    font = Font(args[1] if len(args) > 1 else "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                int(args[2]) if len(args) > 2 else 0)
+    track = -0.01
+    ic = icon(font, track)
+    bn = background(320, 180) + fitted(font, 320, 180, 22, track)
+    wm_w, wm_h = 200, 40
+    wm = fitted(font, wm_w, wm_h, 0, track)
+    render(ic, 108, 108, 4, f"{outdir}/icon.png")
+    render(bn, 320, 180, 2, f"{outdir}/banner.png")
+    render(background(wm_w, wm_h) + wm, wm_w, wm_h, 3, f"{outdir}/wordmark.png")
+    if "--write" in sys.argv:
+        open(f"{ROOT}/core/ui/src/main/res/drawable/ic_launcher.xml", "w").write(vector(ic, 108, 108))
+        open(f"{ROOT}/core/ui/src/main/res/drawable/wordmark.xml", "w").write(vector(wm, wm_w, wm_h))
+        open(f"{ROOT}/app/src/main/res/drawable/banner.xml", "w").write(vector(bn, 320, 180))

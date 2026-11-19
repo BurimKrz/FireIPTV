@@ -30,7 +30,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -182,11 +181,11 @@ private fun Header(
     onOpenPlaylists: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        // The app's launcher icon, so home reads as FireIPTV whatever the playlist is called.
+        // The FireIPTV wordmark, so home reads as the app whatever the playlist is called.
         Image(
-            painter = painterResource(com.fireiptv.core.ui.R.drawable.ic_launcher),
+            painter = painterResource(com.fireiptv.core.ui.R.drawable.wordmark),
             contentDescription = "FireIPTV",
-            modifier = Modifier.size(44.dp).clip(MaterialTheme.shapes.small),
+            modifier = Modifier.size(width = 150.dp, height = 30.dp),
         )
         Text(state.playlist?.name ?: "FireIPTV", style = MaterialTheme.typography.headlineSmall, maxLines = 1)
         // Refresh only runs on request, so say how old the list is.
