@@ -27,7 +27,7 @@ class HiddenChannelsViewModel @Inject constructor(
     private val channelRepository: ChannelRepository,
 ) : ViewModel() {
 
-    private val playlistId = playlistRepository.playlists.map { it.firstOrNull()?.id }.distinctUntilChanged()
+    private val playlistId = playlistRepository.activePlaylist.map { it?.id }.distinctUntilChanged()
 
     val uiState: StateFlow<HiddenChannelsUiState> = playlistId
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else channelRepository.hiddenChannels(id) }

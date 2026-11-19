@@ -4,6 +4,7 @@ import com.fireiptv.core.data.db.PlayerDatabase
 import com.fireiptv.core.data.db.PlaylistEntity
 import com.fireiptv.core.data.db.PlaylistSummary
 import com.fireiptv.core.data.di.ApplicationScope
+import com.fireiptv.core.data.settings.SettingsRepository
 import com.fireiptv.core.log.AppLog
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -12,6 +13,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -35,6 +38,7 @@ class PlaylistRepository @Inject constructor(
     private val importer: PlaylistImporter,
     @param:ApplicationScope private val scope: CoroutineScope,
     private val log: AppLog,
+    private val settings: SettingsRepository,
 ) {
     private val playlistDao = db.playlistDao()
     private val importLock = Mutex()
@@ -43,17 +47,38 @@ class PlaylistRepository @Inject constructor(
     val importState: StateFlow<ImportState> = _importState.asStateFlow()
     val playlists: Flow<List<PlaylistSummary>> = playlistDao.observeSummaries()
 
+    /**
+     * The playlist home, search and the per-playlist settings work on: the one picked last, or the
+     * first one when none was picked or the picked one was deleted.
+     */
+    val activePlaylist: Flow<PlaylistSummary?> = combine(playlists, settings.activePlaylistId) { all, id ->
+        all.firstOrNull { it.id == id } ?: all.firstOrNull()
+    }
+
+    /** [activePlaylist], read once. */
+    suspend fun activePlaylistEntity(): PlaylistEntity? =
+        settings.activePlaylistId.first()?.let { playlistDao.get(it)?.takeUnless { p -> p.isStaging } } ?: playlistDao.first()
+
+    suspend fun setActive(playlistId: Long) = settings.setActivePlaylistId(playlistId)
+
     init {
         scope.launch { importLock.withLock { playlistDao.deleteAllStaging() } }
     }
 
     suspend fun hasPlaylists(): Boolean = playlistDao.hasAny()
 
-    /** Saves the playlist and starts its first import. */
+    /** Saves the playlist, makes it the one home shows, and starts its first import. */
     suspend fun addPlaylist(name: String, url: String): Long {
-        val id = playlistDao.insert(PlaylistEntity(name = name.ifBlank { defaultPlaylistName(url) }, url = url))
+        val id = playlistDao.insert(PlaylistEntity(name = name.ifBlank { uniqueName(defaultPlaylistName(url)) }, url = url))
+        setActive(id)
         refresh(id)
         return id
+    }
+
+    /** Two lists from the same server would both be named after it: number the later ones so the picker tells them apart. */
+    private suspend fun uniqueName(base: String): String {
+        val taken = playlists.first().map { it.name }.toSet()
+        return generateSequence(1) { it + 1 }.map { if (it == 1) base else "$base ($it)" }.first { it !in taken }
     }
 
     fun refresh(playlistId: Long): Job = scope.launch {

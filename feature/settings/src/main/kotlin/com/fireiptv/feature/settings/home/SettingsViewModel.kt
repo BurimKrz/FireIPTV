@@ -80,7 +80,7 @@ class SettingsViewModel @Inject constructor(
     val update: StateFlow<UpdateState> = updates.state
     val installedVersion: String = updates.installedVersion
 
-    private val playlistId = playlistRepository.playlists.map { it.firstOrNull()?.id }.distinctUntilChanged()
+    private val playlistId = playlistRepository.activePlaylist.map { it?.id }.distinctUntilChanged()
     private val groups = playlistId
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else channelRepository.groupSettings(id) }
     private val hiddenChannels = playlistId

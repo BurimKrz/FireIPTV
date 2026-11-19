@@ -42,18 +42,18 @@ sealed interface AccountResult {
 @Singleton
 class AccountRepository @Inject constructor(
     db: PlayerDatabase,
-    playlistRepository: PlaylistRepository,
+    private val playlistRepository: PlaylistRepository,
     private val client: OkHttpClient,
 ) {
     private val playlistDao = db.playlistDao()
 
-    /** True when the first playlist is an Xtream login, so there is an account to show. */
-    val available: Flow<Boolean> = playlistRepository.playlists
-        .map { playlists -> playlists.firstOrNull()?.url?.let { XtreamAccount.fromUrl(it) } != null }
+    /** True when the playlist in use is an Xtream login, so there is an account to show. */
+    val available: Flow<Boolean> = playlistRepository.activePlaylist
+        .map { playlist -> playlist?.url?.let { XtreamAccount.fromUrl(it) } != null }
         .distinctUntilChanged()
 
     suspend fun load(): AccountResult = withContext(Dispatchers.IO) {
-        val playlist = playlistDao.first() ?: return@withContext AccountResult.NotAvailable
+        val playlist = playlistRepository.activePlaylistEntity() ?: return@withContext AccountResult.NotAvailable
         val account = XtreamAccount.fromUrl(playlist.url) ?: return@withContext AccountResult.NotAvailable
         val request = Request.Builder().url(account.apiUrl()).apply { playlist.userAgent?.let { header("User-Agent", it) } }.build()
         try {

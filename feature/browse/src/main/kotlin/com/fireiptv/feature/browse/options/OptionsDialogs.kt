@@ -40,6 +40,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.channel.ChannelList
+import com.fireiptv.core.data.db.PlaylistSummary
 import com.fireiptv.core.ui.verticalDpadMovesFocus
 import com.fireiptv.feature.browse.GroupRow
 import androidx.compose.material3.Text as FieldText
@@ -133,6 +134,34 @@ fun GroupOptionsDialog(
                     confirmDelete = true
                 }
             }
+        }
+    }
+}
+
+/** The Playlists button on home: pick the playlist home shows, or add one. */
+@Composable
+fun PlaylistPickerDialog(
+    playlists: List<PlaylistSummary>,
+    activeId: Long?,
+    onPick: (Long) -> Unit,
+    onAdd: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    OptionsDialog(title = "Playlists", onDismiss = onDismiss) {
+        playlists.forEach { playlist ->
+            val active = playlist.id == activeId
+            OptionRow(
+                playlist.name,
+                mark = if (active) "✓" else "${"%,d".format(playlist.channelCount)} channels",
+                focusFirst = active,
+            ) {
+                onPick(playlist.id)
+                onDismiss()
+            }
+        }
+        OptionRow("Add playlist…", focusFirst = activeId == null) {
+            onDismiss()
+            onAdd()
         }
     }
 }

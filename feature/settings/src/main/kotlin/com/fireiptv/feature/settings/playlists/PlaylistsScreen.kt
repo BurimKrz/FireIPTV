@@ -71,6 +71,10 @@ fun PlaylistsScreen(
                 PlaylistRow(
                     playlist = playlist,
                     importing = running?.playlistId == playlist.id,
+                    active = playlist.id == state.activeId,
+                    // With one playlist there is nothing to pick.
+                    canUse = state.playlists.size > 1,
+                    onUse = { viewModel.use(playlist.id) },
                     onRefresh = { viewModel.refresh(playlist.id) },
                     onDelete = { viewModel.delete(playlist.id) },
                 )
@@ -122,6 +126,9 @@ private fun ImportStatus(state: ImportState) {
 private fun PlaylistRow(
     playlist: PlaylistSummary,
     importing: Boolean,
+    active: Boolean,
+    canUse: Boolean,
+    onUse: () -> Unit,
     onRefresh: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -136,7 +143,10 @@ private fun PlaylistRow(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(playlist.name, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (active && canUse) "${playlist.name} · On home" else playlist.name,
+                    style = MaterialTheme.typography.titleMedium,
+                )
                 Text(
                     buildString {
                         append("${"%,d".format(playlist.channelCount)} channels · ${playlist.groupCount} groups")
@@ -159,6 +169,9 @@ private fun PlaylistRow(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                 )
+            }
+            if (canUse && !active) {
+                OutlinedButton(onClick = onUse) { Text("Show on home") }
             }
             // A stray press on the remote shouldn't wipe a 50k-channel list: ask for a second press.
             var confirmDelete by remember { mutableStateOf(false) }

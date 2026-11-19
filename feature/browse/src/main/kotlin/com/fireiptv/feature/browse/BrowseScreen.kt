@@ -60,6 +60,7 @@ import com.fireiptv.core.ui.ChannelLogo
 import com.fireiptv.core.ui.rememberScrollIdle
 import com.fireiptv.feature.browse.options.ChannelOptionsDialog
 import com.fireiptv.feature.browse.options.GroupOptionsDialog
+import com.fireiptv.feature.browse.options.PlaylistPickerDialog
 import kotlinx.coroutines.delay
 import java.util.concurrent.TimeUnit
 import kotlin.math.ceil
@@ -83,6 +84,7 @@ fun BrowseScreen(
     // Long-press menus: one for a channel, one for a group or category.
     var channelOptions by remember { mutableStateOf<Long?>(null) }
     var groupOptions by remember { mutableStateOf<GroupRow?>(null) }
+    var pickingPlaylist by remember { mutableStateOf(false) }
 
     // Home is the first screen, so Back here leaves the app: ask for a second press, so a stray
     // press while browsing doesn't close it.
@@ -110,7 +112,7 @@ fun BrowseScreen(
             .padding(horizontal = 48.dp, vertical = 27.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Header(state, updateAvailable, onOpenSettings, onOpenSearch)
+        Header(state, updateAvailable, onOpenSettings, onOpenSearch, onOpenPlaylists = { pickingPlaylist = true })
         when {
             state.loading -> Unit
             state.playlist == null -> NoPlaylist(onAddPlaylist)
@@ -146,6 +148,15 @@ fun BrowseScreen(
                 onDismiss = { channelOptions = null },
             )
         }
+        if (pickingPlaylist) {
+            PlaylistPickerDialog(
+                playlists = state.playlists,
+                activeId = state.playlist?.id,
+                onPick = viewModel::usePlaylist,
+                onAdd = onAddPlaylist,
+                onDismiss = { pickingPlaylist = false },
+            )
+        }
         groupOptions?.let { row ->
             val listId = (row.list as? ChannelList.Custom)?.id
             GroupOptionsDialog(
@@ -160,7 +171,13 @@ fun BrowseScreen(
 }
 
 @Composable
-private fun Header(state: BrowseUiState, updateAvailable: Boolean, onOpenSettings: () -> Unit, onOpenSearch: () -> Unit) {
+private fun Header(
+    state: BrowseUiState,
+    updateAvailable: Boolean,
+    onOpenSettings: () -> Unit,
+    onOpenSearch: () -> Unit,
+    onOpenPlaylists: () -> Unit,
+) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         Text(state.playlist?.name ?: "FireIPTV", style = MaterialTheme.typography.headlineSmall, maxLines = 1)
         // Refresh only runs on request, so say how old the list is.
@@ -204,6 +221,7 @@ private fun Header(state: BrowseUiState, updateAvailable: Boolean, onOpenSetting
         }
         Spacer(Modifier.weight(1f))
         if (state.playlist != null) {
+            OutlinedButton(onClick = onOpenPlaylists) { Text("Playlists") }
             OutlinedButton(onClick = onOpenSearch) { Text("Search") }
             OutlinedButton(onClick = onOpenSettings) { Text(if (updateAvailable) "Settings · Update available" else "Settings") }
         }

@@ -67,7 +67,7 @@ class BackupRepository @Inject constructor(
     val location: String = "${Environment.DIRECTORY_PICTURES}/$FILE_NAME"
 
     suspend fun save(): BackupSummary = withContext(Dispatchers.IO) {
-        val playlist = playlistDao.first() ?: throw BackupException("There is no playlist yet, so nothing to back up")
+        val playlist = playlists.activePlaylistEntity() ?: throw BackupException("There is no playlist yet, so nothing to back up")
         val favorites = libraryDao.favorites(playlist.id)
         val lists = userListDao.lists(playlist.id).map { it to userListDao.entries(it.id) }
         val hiddenGroups = playlistDao.hiddenGroupTitles(playlist.id)
@@ -158,7 +158,7 @@ class BackupRepository @Inject constructor(
         }
 
         var added = false
-        var playlist = playlistDao.first()
+        var playlist = playlists.activePlaylistEntity()
         if (playlist == null) {
             val source = backup.playlist ?: throw BackupException("The backup has no playlist, and there is none here yet")
             val id = playlists.addPlaylist(source.name, source.url)
