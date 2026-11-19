@@ -72,6 +72,8 @@ fun BrowseScreen(
     onOpenSettings: () -> Unit,
     onOpenSearch: () -> Unit,
     onAddPlaylist: () -> Unit,
+    /** Settings → Playlists, to rename or change a playlist. */
+    onEditPlaylists: () -> Unit,
     /** [list] is the list the channel was picked from, for zapping. */
     onPlayChannel: (channelId: Long, list: ChannelList) -> Unit,
     viewModel: BrowseViewModel = hiltViewModel(),
@@ -156,6 +158,7 @@ fun BrowseScreen(
                 activeId = state.playlist?.id,
                 onPick = viewModel::usePlaylist,
                 onAdd = onAddPlaylist,
+                onEdit = onEditPlaylists,
                 onDismiss = { pickingPlaylist = false },
             )
         }
@@ -181,13 +184,12 @@ private fun Header(
     onOpenPlaylists: () -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        // The FireIPTV wordmark, so home reads as the app whatever the playlist is called.
+        // The FireIPTV wordmark. The playlist's name isn't shown: the Playlists button tells which one is on.
         Image(
             painter = painterResource(com.fireiptv.core.ui.R.drawable.wordmark),
             contentDescription = "FireIPTV",
             modifier = Modifier.size(width = 150.dp, height = 30.dp),
         )
-        Text(state.playlist?.name ?: "FireIPTV", style = MaterialTheme.typography.headlineSmall, maxLines = 1)
         // Refresh only runs on request, so say how old the list is.
         state.playlist?.lastSync?.let { synced ->
             val days = ((System.currentTimeMillis() - synced) / DAY_MS).toLong().coerceAtLeast(0)

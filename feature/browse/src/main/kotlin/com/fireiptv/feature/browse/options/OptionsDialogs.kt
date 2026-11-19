@@ -145,6 +145,7 @@ fun PlaylistPickerDialog(
     activeId: Long?,
     onPick: (Long) -> Unit,
     onAdd: () -> Unit,
+    onEdit: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     OptionsDialog(title = "Playlists", onDismiss = onDismiss) {
@@ -162,6 +163,12 @@ fun PlaylistPickerDialog(
         OptionRow("Add playlist…", focusFirst = activeId == null) {
             onDismiss()
             onAdd()
+        }
+        if (playlists.isNotEmpty()) {
+            OptionRow("Edit playlists…") {
+                onDismiss()
+                onEdit()
+            }
         }
     }
 }

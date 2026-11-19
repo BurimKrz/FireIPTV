@@ -20,6 +20,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -88,9 +89,11 @@ fun AddPlaylistScreen(
         )
 
         val fieldModifier = Modifier.widthIn(max = 900.dp).fillMaxWidth().verticalDpadMovesFocus()
+        // Down from the last field goes to Import: by distance alone it would pick the wider Restore button.
+        val lastField = fieldModifier.focusProperties { down = importFocus }
         if (useM3u) {
             Field("Playlist URL", url, { url = it }, state.urlError, KeyboardType.Uri, fieldModifier.focusRequester(firstField))
-            Field("Name (optional)", name, { name = it }, null, KeyboardType.Text, fieldModifier, ImeAction.Done)
+            Field("Name (optional)", name, { name = it }, null, KeyboardType.Text, lastField, ImeAction.Done)
         } else {
             Field("Server, e.g. http://provider.com:8080", server, { server = it }, state.serverError, KeyboardType.Uri, fieldModifier.focusRequester(firstField))
             Field("Username", username, { username = it }, state.usernameError, KeyboardType.Text, fieldModifier)
@@ -100,7 +103,7 @@ fun AddPlaylistScreen(
                 { password = it },
                 state.passwordError,
                 KeyboardType.Password,
-                fieldModifier,
+                lastField,
                 ImeAction.Done,
                 if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
             )
@@ -136,8 +139,9 @@ fun AddPlaylistScreen(
     }
 }
 
+/** A one-line form field; shared with the edit screen. */
 @Composable
-private fun Field(
+internal fun Field(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,

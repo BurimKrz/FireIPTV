@@ -37,6 +37,8 @@ import com.fireiptv.feature.settings.hidden.HiddenChannelsScreen
 import com.fireiptv.feature.settings.home.SettingsScreen
 import com.fireiptv.feature.settings.log.LogScreen
 import com.fireiptv.feature.settings.playlists.AddPlaylistScreen
+import com.fireiptv.feature.settings.playlists.EditPlaylistScreen
+import com.fireiptv.feature.settings.playlists.EditPlaylistViewModel
 import com.fireiptv.feature.settings.playlists.PlaylistsScreen
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
@@ -102,6 +104,9 @@ private object Routes {
     const val BROWSE = "browse"
     const val PLAYLISTS = "playlists"
     const val ADD_PLAYLIST = "playlists/add"
+    const val EDIT_PLAYLIST = "playlists/edit/{${EditPlaylistViewModel.ARG_PLAYLIST_ID}}"
+
+    fun editPlaylist(id: Long) = "playlists/edit/$id"
     const val SEARCH = "search"
     const val SETTINGS = "settings"
     const val GROUPS = "settings/groups"
@@ -129,6 +134,7 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
                 onOpenSettings = { navController.navigate(Routes.SETTINGS) },
                 onOpenSearch = { navController.navigate(Routes.SEARCH) },
                 onAddPlaylist = { navController.navigate(Routes.ADD_PLAYLIST) },
+                onEditPlaylists = { navController.navigate(Routes.PLAYLISTS) },
                 onPlayChannel = { channelId, list -> navController.navigate(Routes.player(channelId, list)) },
             )
         }
@@ -170,7 +176,16 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
             LogScreen()
         }
         composable(Routes.PLAYLISTS) {
-            PlaylistsScreen(onAddPlaylist = { navController.navigate(Routes.ADD_PLAYLIST) })
+            PlaylistsScreen(
+                onAddPlaylist = { navController.navigate(Routes.ADD_PLAYLIST) },
+                onEditPlaylist = { navController.navigate(Routes.editPlaylist(it)) },
+            )
+        }
+        composable(
+            Routes.EDIT_PLAYLIST,
+            arguments = listOf(navArgument(EditPlaylistViewModel.ARG_PLAYLIST_ID) { type = NavType.LongType }),
+        ) {
+            EditPlaylistScreen(onDone = { navController.popBackStack() })
         }
         composable(Routes.ADD_PLAYLIST) {
             AddPlaylistScreen(

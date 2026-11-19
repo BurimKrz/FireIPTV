@@ -101,5 +101,30 @@ class PlaylistRepository @Inject constructor(
         }
     }
 
+    suspend fun playlist(playlistId: Long): PlaylistEntity? = playlistDao.get(playlistId)?.takeUnless { it.isStaging }
+
+    /**
+     * Renames a playlist and/or changes its link or login. A new link is refreshed right away;
+     * favourites and categories follow their channels by name if the stream links changed.
+     */
+    suspend fun edit(playlistId: Long, name: String, url: String) {
+        val urlChanged = importLock.withLock {
+            val playlist = playlistDao.get(playlistId) ?: return
+            val changed = playlist.url != url
+            playlistDao.update(
+                playlist.copy(
+                    name = name.ifBlank { defaultPlaylistName(url) },
+                    url = url,
+                    // Validators and expiry belong to the old link.
+                    etag = if (changed) null else playlist.etag,
+                    lastModified = if (changed) null else playlist.lastModified,
+                    accountExpiresAt = if (changed) null else playlist.accountExpiresAt,
+                ),
+            )
+            changed
+        }
+        if (urlChanged) refresh(playlistId)
+    }
+
     suspend fun delete(playlistId: Long) = importLock.withLock { playlistDao.delete(playlistId) }
 }

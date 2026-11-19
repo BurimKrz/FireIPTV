@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,6 +40,7 @@ import com.fireiptv.core.data.playlist.displayUrl
 @Composable
 fun PlaylistsScreen(
     onAddPlaylist: () -> Unit,
+    onEditPlaylist: (Long) -> Unit,
     viewModel: PlaylistsViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -75,6 +77,7 @@ fun PlaylistsScreen(
                     // With one playlist there is nothing to pick.
                     canUse = state.playlists.size > 1,
                     onUse = { viewModel.use(playlist.id) },
+                    onEdit = { onEditPlaylist(playlist.id) },
                     onRefresh = { viewModel.refresh(playlist.id) },
                     onDelete = { viewModel.delete(playlist.id) },
                 )
@@ -129,6 +132,7 @@ private fun PlaylistRow(
     active: Boolean,
     canUse: Boolean,
     onUse: () -> Unit,
+    onEdit: () -> Unit,
     onRefresh: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -143,10 +147,20 @@ private fun PlaylistRow(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
         ) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    if (active && canUse) "${playlist.name} · On home" else playlist.name,
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                // One line each, cut with "…": a long name must not squeeze the buttons.
+                // "On home" stays whole; only the name is cut.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        playlist.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (active && canUse) {
+                        Text(" · On home", style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                    }
+                }
                 Text(
                     buildString {
                         append("${"%,d".format(playlist.channelCount)} channels · ${playlist.groupCount} groups")
@@ -168,8 +182,10 @@ private fun PlaylistRow(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
+            OutlinedButton(onClick = onEdit, enabled = !importing) { Text("Edit") }
             if (canUse && !active) {
                 OutlinedButton(onClick = onUse) { Text("Show on home") }
             }

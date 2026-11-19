@@ -39,7 +39,7 @@ adb shell "am start -n com.fireiptv.player/.MainActivity --es playlist_url 'http
 | Long-press OK on a channel | Favourites, your categories (✓), **New category…**, **Hide channel**; in Favourites or a category also **Move up** / **Move down** |
 | Menu (☰) on a group or category | Pins it to the top, or unpins it |
 | Long-press OK on a group or category | Pin; for your own categories also Rename and Delete (press twice) |
-| **Playlists** (top right) | Picks which playlist home shows (✓ marks it), or **Add playlist…**. Search, groups, hidden channels, Account and Backup follow the one picked; a playlist you add is shown right away |
+| **Playlists** (top right) | Picks which playlist home shows (✓ marks it), **Add playlist…**, or **Edit playlists…** (Settings → Playlists). Search, groups, hidden channels, Account and Backup follow the one picked; a playlist you add is shown right away |
 | **Search** (top right) | Searches every channel by name as you type, hidden ones included; case and accents don't matter ("kosove" finds "KOSOVË") |
 | Back | Press twice to leave the app |
 
@@ -65,7 +65,7 @@ After 3 hours without a key press it asks "Still watching?" and stops the stream
 
 | Row | Does |
 | --- | --- |
-| Playlists | Refresh (only when you press it), delete, add, **Show on home** (the one shown is marked "On home") |
+| Playlists | Refresh (only when you press it), delete, add, **Edit** (name, Xtream login or M3U link; a new login or link reloads the channels), **Show on home** (the one shown is marked "On home") |
 | Account | Status, expiry date and connections, from an Xtream provider |
 | Groups | Hide groups you never watch; search still finds their channels |
 | Hidden channels | Channels you hid one by one; OK shows one again |

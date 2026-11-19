@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
-val appVersion = "1.0.0"
+val appVersion = "1.0.1"
 
 android {
     namespace = "com.fireiptv.player"
