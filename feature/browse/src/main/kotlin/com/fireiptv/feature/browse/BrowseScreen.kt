@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -35,6 +37,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -55,6 +58,7 @@ import androidx.tv.material3.DenseListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
+import com.fireiptv.core.data.AppEdition
 import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.playlist.ImportState
 import com.fireiptv.core.ui.ChannelLogo
@@ -216,6 +220,17 @@ private fun Header(
             contentDescription = "FireIPTV",
             modifier = Modifier.size(width = 150.dp, height = 30.dp),
         )
+        // FireIPTV Beta looks the same otherwise: say which app this is.
+        if (AppEdition.of(LocalContext.current) == AppEdition.Beta) {
+            Text(
+                "BETA",
+                style = MaterialTheme.typography.labelMedium,
+                color = BETA_TEXT,
+                modifier = Modifier
+                    .background(BETA_BADGE, RoundedCornerShape(50))
+                    .padding(horizontal = 10.dp, vertical = 2.dp),
+            )
+        }
         // Refresh only runs on request, so say how old the list is.
         state.playlist?.lastSync?.let { synced ->
             val days = ((System.currentTimeMillis() - synced) / DAY_MS).toLong().coerceAtLeast(0)
@@ -541,6 +556,10 @@ private fun ChannelItem(
 
 /** Back moves focus to [list] in the groups column; [seq] makes each press a new request. */
 private data class GroupJump(val list: ChannelList, val seq: Int)
+
+// The same cyan and near-black as the BETA badge on FireIPTV Beta's icon (tools/make-icon.py).
+private val BETA_BADGE = Color(0xFF26C6DA)
+private val BETA_TEXT = Color(0xFF0B0C11)
 
 private const val RETURN_FOCUS_FRAMES = 60
 private const val EXIT_CONFIRM_MS = 2_000L

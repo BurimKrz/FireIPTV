@@ -182,7 +182,8 @@ fun SettingsScreen(
             modifier = rowModifier.focusRequester(rows[ROW_LOG]),
         )
         Text(
-            "FireIPTV $appVersion",
+            // "FireIPTV" or "FireIPTV Beta": the launcher name of whichever app this is.
+            "${LocalContext.current.applicationInfo.loadLabel(LocalContext.current.packageManager)} $appVersion",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 24.dp, start = 16.dp),
