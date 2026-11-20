@@ -240,6 +240,8 @@ class PlaylistImporter @Inject constructor(
             if (!inPlace) playlistDao.swapStaging(stagingId = written.targetId, targetId = playlist.id)
             db.libraryDao().relinkAfterImport(playlist.id)
             db.userListDao().relinkAfterImport(playlist.id)
+            // Movie lists are kept until a refresh: drop them so they download fresh when next opened.
+            db.movieDao().deleteAll(playlist.id)
             playlistDao.update(playlist.update().copy(lastSync = System.currentTimeMillis()))
         }
     }

@@ -29,6 +29,14 @@ internal class XtreamAccount(
         .build()
         .toString()
 
+    fun movieUrl(streamId: String, extension: String): String = baseUrl.newBuilder()
+        .addPathSegment("movie")
+        .addPathSegment(username)
+        .addPathSegment(password)
+        .addPathSegment("$streamId.$extension")
+        .build()
+        .toString()
+
     companion object {
         fun fromUrl(url: String): XtreamAccount? {
             val parsed = url.toHttpUrlOrNull() ?: return null

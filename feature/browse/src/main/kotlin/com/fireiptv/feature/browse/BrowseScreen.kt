@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +64,7 @@ import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.playlist.ImportState
 import com.fireiptv.core.ui.ChannelLogo
 import com.fireiptv.core.ui.rememberScrollIdle
+import com.fireiptv.feature.browse.movies.MoviesContent
 import com.fireiptv.feature.browse.options.ChannelOptionsDialog
 import com.fireiptv.feature.browse.options.GroupOptionsDialog
 import com.fireiptv.feature.browse.options.PlaylistPickerDialog
@@ -79,9 +81,13 @@ fun BrowseScreen(
     onEditPlaylists: () -> Unit,
     /** [list] is the list the channel was picked from, for zapping. */
     onPlayChannel: (channelId: Long, list: ChannelList) -> Unit,
+    onOpenMovie: (movieId: Long) -> Unit,
     viewModel: BrowseViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val chosenSection by viewModel.section.collectAsStateWithLifecycle()
+    // A playlist without movies (an M3U link) always shows Live TV.
+    val section = if (state.moviesAvailable) chosenSection else Section.Live
     val updateAvailable by viewModel.updateAvailable.collectAsStateWithLifecycle()
     val channels = viewModel.channels.collectAsLazyPagingItems()
 
@@ -97,6 +103,11 @@ fun BrowseScreen(
     // The group row holding focus, or null when focus is on the channels or the buttons.
     var focusedGroupRow by remember { mutableStateOf<ChannelList?>(null) }
     var groupJump by remember { mutableStateOf<GroupJump?>(null) }
+    var groupJumps by remember { mutableIntStateOf(0) }
+    fun jumpToGroup(list: ChannelList) {
+        channelsTopFor = null
+        groupJump = GroupJump(list, ++groupJumps)
+    }
 
     // Home is the first screen, so Back here leaves the app. It steps out one level at a time:
     // channels → their group → All channels at the top → "Press Back again", so a stray press
@@ -112,8 +123,7 @@ fun BrowseScreen(
             else -> null
         }
         if (target != null) {
-            channelsTopFor = null
-            groupJump = GroupJump(target, (groupJump?.seq ?: 0) + 1)
+            jumpToGroup(target)
             return@BackHandler
         }
         val now = SystemClock.elapsedRealtime()
@@ -136,15 +146,32 @@ fun BrowseScreen(
             .padding(horizontal = 48.dp, vertical = 27.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Header(state, updateAvailable, onOpenSettings, onOpenSearch, onOpenPlaylists = { pickingPlaylist = true })
+        Header(
+            state,
+            section,
+            updateAvailable,
+            onSection = viewModel::showSection,
+            onOpenSettings = onOpenSettings,
+            onOpenSearch = onOpenSearch,
+            onOpenPlaylists = { pickingPlaylist = true },
+        )
         when {
             state.loading -> Unit
             state.playlist == null -> NoPlaylist(onAddPlaylist)
+            section == Section.Movies -> MoviesContent(
+                onOpenMovie = onOpenMovie,
+                // Back from the first category: Live TV, on All channels at the top.
+                onBackToLive = {
+                    viewModel.showSection(Section.Live)
+                    jumpToGroup(ChannelList.All)
+                },
+            )
             else -> Row(horizontalArrangement = Arrangement.spacedBy(24.dp), modifier = Modifier.fillMaxSize()) {
                 GroupsColumn(
                     state,
                     focusOnStart = focusGroups,
                     jump = groupJump,
+                    onJumpDone = { groupJump = null },
                     onFocusedRowChanged = { focusedGroupRow = it },
                     onSelect = viewModel::select,
                     onEnterChannels = { group ->
@@ -208,7 +235,9 @@ fun BrowseScreen(
 @Composable
 private fun Header(
     state: BrowseUiState,
+    section: Section,
     updateAvailable: Boolean,
+    onSection: (Section) -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSearch: () -> Unit,
     onOpenPlaylists: () -> Unit,
@@ -230,6 +259,13 @@ private fun Header(
                     .background(BETA_BADGE, RoundedCornerShape(50))
                     .padding(horizontal = 10.dp, vertical = 2.dp),
             )
+        }
+        // OK switches (not focus), so moving along the header never starts a download.
+        if (state.moviesAvailable) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SectionTab("Live TV", selected = section == Section.Live) { onSection(Section.Live) }
+                SectionTab("Movies", selected = section == Section.Movies) { onSection(Section.Movies) }
+            }
         }
         // Refresh only runs on request, so say how old the list is.
         state.playlist?.lastSync?.let { synced ->
@@ -279,6 +315,16 @@ private fun Header(
     }
 }
 
+/** One side of the Live TV / Movies switch: filled when it's the one showing. */
+@Composable
+private fun SectionTab(label: String, selected: Boolean, onClick: () -> Unit) {
+    if (selected) {
+        Button(onClick = onClick) { Text(label) }
+    } else {
+        OutlinedButton(onClick = onClick) { Text(label) }
+    }
+}
+
 @Composable
 private fun NoPlaylist(onAddPlaylist: () -> Unit) {
     val focus = remember { FocusRequester() }
@@ -293,8 +339,9 @@ private fun NoPlaylist(onAddPlaylist: () -> Unit) {
 private fun GroupsColumn(
     state: BrowseUiState,
     focusOnStart: Boolean,
-    /** Each new value scrolls to its group, if it's out of sight, and focuses it. */
+    /** Each new value scrolls to its group, if it's out of sight, and focuses it; then [onJumpDone]. */
     jump: GroupJump?,
+    onJumpDone: () -> Unit,
     onFocusedRowChanged: (ChannelList?) -> Unit,
     onSelect: (ChannelList) -> Unit,
     /** OK or Right on a group: open it and go to its first channel. */
@@ -327,9 +374,13 @@ private fun GroupsColumn(
         // focused last; the next one, from inside, reaches the target.
         repeat(RETURN_FOCUS_FRAMES) {
             withFrameNanos {}
-            if (focusedRow == target) return@LaunchedEffect
+            if (focusedRow == target) {
+                onJumpDone()
+                return@LaunchedEffect
+            }
             if (listState.layoutInfo.visibleItemsInfo.any { it.key == key }) jumpFocus.requestFocus()
         }
+        onJumpDone()
     }
 
     // Moving through groups shows each one's channels, but only once focus rests, so holding

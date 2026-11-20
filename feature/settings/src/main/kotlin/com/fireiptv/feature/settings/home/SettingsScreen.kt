@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import com.fireiptv.core.data.AppEdition
 import com.fireiptv.core.data.settings.StartMode
 import com.fireiptv.core.data.update.UpdateState
 import com.fireiptv.feature.settings.log.summary
@@ -124,12 +125,14 @@ fun SettingsScreen(
             onClick = { open(ROW_START, viewModel::toggleStartMode) },
             modifier = rowModifier.focusRequester(rows[ROW_START]),
         )
+        // FireIPTV Beta has movie posters too, under the same switch and cache.
+        val images = if (AppEdition.of(LocalContext.current) == AppEdition.Beta) "logos and posters" else "logos"
         SettingRow(
-            title = "Channel logos: " + if (state.logosEnabled) "On" else "Off",
+            title = "Channel ${images}: " + if (state.logosEnabled) "On" else "Off",
             detail = if (state.logosEnabled) {
-                "Each logo downloads once and is kept (up to 50 MB). OK to turn off: no logo downloads at all."
+                "Each one downloads once and is kept (up to 50 MB). OK to turn off: no $images download at all."
             } else {
-                "No logos are shown or downloaded. OK to turn on."
+                "No $images are shown or downloaded. OK to turn on."
             },
             onClick = { open(ROW_LOGOS, viewModel::toggleLogos) },
             modifier = rowModifier.focusRequester(rows[ROW_LOGOS]),

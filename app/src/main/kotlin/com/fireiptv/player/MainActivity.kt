@@ -28,6 +28,8 @@ import com.fireiptv.core.data.usage.DataUsageRepository
 import com.fireiptv.core.ui.FireTheme
 import com.fireiptv.core.ui.LocalLogosEnabled
 import com.fireiptv.feature.browse.BrowseScreen
+import com.fireiptv.feature.browse.movies.MovieInfoScreen
+import com.fireiptv.feature.browse.movies.MovieInfoViewModel
 import com.fireiptv.feature.browse.search.SearchScreen
 import com.fireiptv.feature.player.PlayerScreen
 import com.fireiptv.feature.player.PlayerViewModel
@@ -114,6 +116,9 @@ private object Routes {
     const val ACCOUNT = "settings/account"
     const val LOG = "settings/log"
     const val PLAYER = "player/{${PlayerViewModel.ARG_CHANNEL_ID}}?list={${PlayerViewModel.ARG_LIST}}"
+    const val MOVIE = "movie/{${MovieInfoViewModel.ARG_MOVIE_ID}}"
+
+    fun movie(id: Long) = "movie/$id"
 
     fun player(channelId: Long, list: ChannelList) = "player/$channelId?list=${list.encode()}"
 }
@@ -136,7 +141,14 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
                 onAddPlaylist = { navController.navigate(Routes.ADD_PLAYLIST) },
                 onEditPlaylists = { navController.navigate(Routes.PLAYLISTS) },
                 onPlayChannel = { channelId, list -> navController.navigate(Routes.player(channelId, list)) },
+                onOpenMovie = { navController.navigate(Routes.movie(it)) },
             )
+        }
+        composable(
+            Routes.MOVIE,
+            arguments = listOf(navArgument(MovieInfoViewModel.ARG_MOVIE_ID) { type = NavType.LongType }),
+        ) {
+            MovieInfoScreen()
         }
         composable(
             Routes.PLAYER,

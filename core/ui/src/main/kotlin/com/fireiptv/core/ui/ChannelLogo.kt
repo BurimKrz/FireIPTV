@@ -31,10 +31,16 @@ val LocalLogosEnabled = compositionLocalOf { true }
  *
  * Data: a logo already on disk shows at once. One that isn't is downloaded only when [mayDownload]
  * (in lists: the list has stopped moving, see [rememberScrollIdle]) and after it has been on screen
- * for [SETTLE_MS], so channels passed on the way to another are never fetched.
+ * for [SETTLE_MS], so channels passed on the way to another are never fetched. Movie posters use
+ * the same rules (and the same 50 MB cache), with [contentScale] Crop to fill their frame.
  */
 @Composable
-fun ChannelLogo(url: String?, modifier: Modifier = Modifier, mayDownload: Boolean = true) {
+fun ChannelLogo(
+    url: String?,
+    modifier: Modifier = Modifier,
+    mayDownload: Boolean = true,
+    contentScale: ContentScale = ContentScale.Fit,
+) {
     if (!LocalLogosEnabled.current || url.isNullOrBlank()) return
 
     var notCached by remember(url) { mutableStateOf(false) }
@@ -61,7 +67,7 @@ fun ChannelLogo(url: String?, modifier: Modifier = Modifier, mayDownload: Boolea
             AsyncImage(
                 model = request,
                 contentDescription = null,
-                contentScale = ContentScale.Fit,
+                contentScale = contentScale,
                 // The first, cache-only try fails for a logo not downloaded yet: allow the network then.
                 onError = { if (!useNetwork) notCached = true },
                 modifier = Modifier.fillMaxSize(),

@@ -1,11 +1,13 @@
 package com.fireiptv.feature.browse
 
+import android.content.Context
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
+import com.fireiptv.core.data.AppEdition
 import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.channel.ChannelRepository
 import com.fireiptv.core.data.db.ChannelListItem
@@ -14,12 +16,15 @@ import com.fireiptv.core.data.playlist.ImportState
 import com.fireiptv.core.data.playlist.PlaylistRepository
 import com.fireiptv.core.data.update.UpdateRepository
 import com.fireiptv.core.data.update.UpdateState
+import com.fireiptv.core.data.vod.MovieRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -47,6 +52,9 @@ data class GroupRow(
 @Immutable
 data class ChannelRow(val id: Long, val number: Int, val name: String, val logoUrl: String?, val favorite: Boolean)
 
+/** What home shows under the header. */
+enum class Section { Live, Movies }
+
 /** Where focus goes when coming back from the player: [index] in the current channel list. */
 data class ReturnTarget(val channelId: Long, val index: Int)
 
@@ -58,6 +66,8 @@ data class BrowseUiState(
     val groups: List<GroupRow> = emptyList(),
     val selectedList: ChannelList = ChannelList.All,
     val importState: ImportState = ImportState.Idle,
+    /** FireIPTV Beta with an Xtream playlist: the Live TV / Movies switch shows. */
+    val moviesAvailable: Boolean = false,
 ) {
     val selectedGroup: GroupRow? get() = groups.firstOrNull { it.list == selectedList }
 }
@@ -68,7 +78,21 @@ class BrowseViewModel @Inject constructor(
     private val playlistRepository: PlaylistRepository,
     private val channelRepository: ChannelRepository,
     updateRepository: UpdateRepository,
+    private val movieRepository: MovieRepository,
+    @ApplicationContext context: Context,
 ) : ViewModel() {
+
+    // Movies are tried out in FireIPTV Beta first.
+    private val moviesInThisApp = AppEdition.of(context) == AppEdition.Beta
+
+    private val _section = MutableStateFlow(Section.Live)
+
+    /** Live TV or Movies; kept while the player or a movie's page is open. */
+    val section: StateFlow<Section> = _section.asStateFlow()
+
+    fun showSection(section: Section) {
+        _section.value = section
+    }
 
     /** A newer version is on GitHub (from today's check), so Settings gets a hint. */
     val updateAvailable: StateFlow<Boolean> = updateRepository.state
@@ -153,6 +177,7 @@ class BrowseViewModel @Inject constructor(
                 groups = groups,
                 selectedList = selected,
                 importState = import,
+                moviesAvailable = moviesInThisApp && playlist != null && movieRepository.supportsMovies(playlist.url),
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BrowseUiState())
 

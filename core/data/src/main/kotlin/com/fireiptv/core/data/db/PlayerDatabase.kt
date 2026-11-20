@@ -18,8 +18,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         UserListEntity::class,
         UserListEntryEntity::class,
         HiddenChannelEntity::class,
+        MovieCategoryEntity::class,
+        MovieEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 1, to = 2),
@@ -31,6 +33,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AutoMigration(from = 5, to = 6),
         // v7: single hidden channels.
         AutoMigration(from = 6, to = 7),
+        // v8: movie categories and movies (FireIPTV Beta).
+        AutoMigration(from = 7, to = 8),
     ],
 )
 abstract class PlayerDatabase : RoomDatabase() {
@@ -39,6 +43,7 @@ abstract class PlayerDatabase : RoomDatabase() {
     abstract fun channelDao(): ChannelDao
     abstract fun libraryDao(): LibraryDao
     abstract fun userListDao(): UserListDao
+    abstract fun movieDao(): MovieDao
 
     companion object {
         fun build(context: Context, inMemory: Boolean = false): PlayerDatabase {
