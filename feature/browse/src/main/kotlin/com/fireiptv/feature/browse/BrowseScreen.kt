@@ -24,7 +24,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,19 +90,26 @@ fun BrowseScreen(
     var pickingPlaylist by remember { mutableStateOf(false) }
     // Entering the channels from a group lands on the first channel of that group, once it's loaded.
     var channelsTopFor by remember { mutableStateOf<ChannelList?>(null) }
-    // Back first takes focus to the top of the groups; bumping this asks the column to do it.
-    var groupsTopRequest by remember { mutableIntStateOf(0) }
-    var atTopGroup by remember { mutableStateOf(false) }
+    // The group row holding focus, or null when focus is on the channels or the buttons.
+    var focusedGroupRow by remember { mutableStateOf<ChannelList?>(null) }
+    var groupJump by remember { mutableStateOf<GroupJump?>(null) }
 
-    // Home is the first screen, so Back here leaves the app: from anywhere but the top group it
-    // goes there first, then asks for a second press, so a stray press while browsing doesn't close it.
+    // Home is the first screen, so Back here leaves the app. It steps out one level at a time:
+    // channels → their group → All channels at the top → "Press Back again", so a stray press
+    // while browsing doesn't close it.
     val activity = LocalActivity.current
     val context = LocalContext.current
     var backPressedAt by remember { mutableLongStateOf(0L) }
     BackHandler {
-        if (state.groups.isNotEmpty() && !atTopGroup) {
+        val target = when {
+            state.groups.isEmpty() -> null
+            focusedGroupRow == null -> state.selectedList
+            focusedGroupRow != ChannelList.All -> ChannelList.All
+            else -> null
+        }
+        if (target != null) {
             channelsTopFor = null
-            groupsTopRequest++
+            groupJump = GroupJump(target, (groupJump?.seq ?: 0) + 1)
             return@BackHandler
         }
         val now = SystemClock.elapsedRealtime()
@@ -134,8 +140,8 @@ fun BrowseScreen(
                 GroupsColumn(
                     state,
                     focusOnStart = focusGroups,
-                    topRequest = groupsTopRequest,
-                    onTopFocusChanged = { atTopGroup = it },
+                    jump = groupJump,
+                    onFocusedRowChanged = { focusedGroupRow = it },
                     onSelect = viewModel::select,
                     onEnterChannels = { group ->
                         viewModel.select(group.list)
@@ -272,9 +278,9 @@ private fun NoPlaylist(onAddPlaylist: () -> Unit) {
 private fun GroupsColumn(
     state: BrowseUiState,
     focusOnStart: Boolean,
-    /** Each new value scrolls to the top and focuses the first group (All channels). */
-    topRequest: Int,
-    onTopFocusChanged: (Boolean) -> Unit,
+    /** Each new value scrolls to its group, if it's out of sight, and focuses it. */
+    jump: GroupJump?,
+    onFocusedRowChanged: (ChannelList?) -> Unit,
     onSelect: (ChannelList) -> Unit,
     /** OK or Right on a group: open it and go to its first channel. */
     onEnterChannels: (GroupRow) -> Unit,
@@ -284,17 +290,30 @@ private fun GroupsColumn(
 ) {
     val listState = rememberLazyListState()
     val firstGroup = remember { FocusRequester() }
-    var topFocused by remember { mutableStateOf(false) }
     LaunchedEffect(focusOnStart) { if (focusOnStart) firstGroup.requestFocus() }
-    LaunchedEffect(topRequest) {
-        if (topRequest == 0) return@LaunchedEffect
-        listState.scrollToItem(0)
+    // The row holding focus, or null when focus is outside the column.
+    var focusedRow by remember { mutableStateOf<ChannelList?>(null) }
+    LaunchedEffect(focusedRow) { onFocusedRowChanged(focusedRow) }
+    val jumpFocus = remember { FocusRequester() }
+    var jumpTarget by remember { mutableStateOf<ChannelList?>(null) }
+    LaunchedEffect(jump) {
+        jump ?: return@LaunchedEffect
+        // A group that's gone (hidden, refreshed away) falls back to the top.
+        val index = state.groups.indexOfFirst { it.list == jump.list }.coerceAtLeast(0)
+        val target = state.groups.getOrNull(index)?.list ?: return@LaunchedEffect
+        val key = target.encode()
+        jumpTarget = target
+        if (index == 0) {
+            listState.scrollToItem(0)
+        } else if (listState.layoutInfo.visibleItemsInfo.none { it.key == key }) {
+            listState.scrollToItem(index)
+        }
         // Coming from outside the column, the focus restorer sends the first request to the group
-        // focused last; the next one, from inside, reaches the top.
+        // focused last; the next one, from inside, reaches the target.
         repeat(RETURN_FOCUS_FRAMES) {
             withFrameNanos {}
-            if (topFocused) return@LaunchedEffect
-            if (listState.layoutInfo.visibleItemsInfo.any { it.index == 0 }) firstGroup.requestFocus()
+            if (focusedRow == target) return@LaunchedEffect
+            if (listState.layoutInfo.visibleItemsInfo.any { it.key == key }) jumpFocus.requestFocus()
         }
     }
 
@@ -329,23 +348,16 @@ private fun GroupsColumn(
                 },
                 trailingContent = { Text("%,d".format(group.channelCount)) },
                 modifier = Modifier
-                    .then(
-                        // All channels is always the first row.
-                        if (group.list == ChannelList.All) {
-                            Modifier
-                                .focusRequester(firstGroup)
-                                .onFocusChanged {
-                                    topFocused = it.isFocused
-                                    onTopFocusChanged(it.isFocused)
-                                }
-                        } else {
-                            Modifier
-                        },
-                    )
+                    // All channels is always the first row.
+                    .then(if (group.list == ChannelList.All) Modifier.focusRequester(firstGroup) else Modifier)
+                    .then(if (group.list == jumpTarget) Modifier.focusRequester(jumpFocus) else Modifier)
                     .onFocusChanged {
                         if (it.isFocused) {
                             focusedGroup = group.list
+                            focusedRow = group.list
                             onGroupFocused(group.list)
+                        } else if (focusedRow == group.list) {
+                            focusedRow = null
                         }
                     }
                     .onKeyEvent { event ->
@@ -526,6 +538,9 @@ private fun ChannelItem(
             },
     )
 }
+
+/** Back moves focus to [list] in the groups column; [seq] makes each press a new request. */
+private data class GroupJump(val list: ChannelList, val seq: Int)
 
 private const val RETURN_FOCUS_FRAMES = 60
 private const val EXIT_CONFIRM_MS = 2_000L
