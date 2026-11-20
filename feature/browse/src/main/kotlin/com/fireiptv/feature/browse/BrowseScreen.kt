@@ -20,9 +20,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,7 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
@@ -41,7 +42,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -89,13 +89,23 @@ fun BrowseScreen(
     var channelOptions by remember { mutableStateOf<Long?>(null) }
     var groupOptions by remember { mutableStateOf<GroupRow?>(null) }
     var pickingPlaylist by remember { mutableStateOf(false) }
+    // Entering the channels from a group lands on the first channel of that group, once it's loaded.
+    var channelsTopFor by remember { mutableStateOf<ChannelList?>(null) }
+    // Back first takes focus to the top of the groups; bumping this asks the column to do it.
+    var groupsTopRequest by remember { mutableIntStateOf(0) }
+    var atTopGroup by remember { mutableStateOf(false) }
 
-    // Home is the first screen, so Back here leaves the app: ask for a second press, so a stray
-    // press while browsing doesn't close it.
+    // Home is the first screen, so Back here leaves the app: from anywhere but the top group it
+    // goes there first, then asks for a second press, so a stray press while browsing doesn't close it.
     val activity = LocalActivity.current
     val context = LocalContext.current
     var backPressedAt by remember { mutableLongStateOf(0L) }
     BackHandler {
+        if (state.groups.isNotEmpty() && !atTopGroup) {
+            channelsTopFor = null
+            groupsTopRequest++
+            return@BackHandler
+        }
         val now = SystemClock.elapsedRealtime()
         if (now - backPressedAt < EXIT_CONFIRM_MS) {
             activity?.finish()
@@ -124,7 +134,15 @@ fun BrowseScreen(
                 GroupsColumn(
                     state,
                     focusOnStart = focusGroups,
+                    topRequest = groupsTopRequest,
+                    onTopFocusChanged = { atTopGroup = it },
                     onSelect = viewModel::select,
+                    onEnterChannels = { group ->
+                        viewModel.select(group.list)
+                        // An empty group has no channel to go to: focus stays on it.
+                        channelsTopFor = if (group.channelCount > 0) group.list else null
+                    },
+                    onGroupFocused = { list -> if (channelsTopFor != list) channelsTopFor = null },
                     onTogglePinned = viewModel::togglePinned,
                     onOptions = { groupOptions = it },
                 )
@@ -132,6 +150,8 @@ fun BrowseScreen(
                     state,
                     channels,
                     returnTarget,
+                    focusTopFor = channelsTopFor,
+                    onTopFocused = { channelsTopFor = null },
                     onPlayChannel = { channelId -> onPlayChannel(channelId, state.selectedList) },
                     onToggleFavorite = viewModel::toggleFavorite,
                     onOptions = { channelOptions = it },
@@ -252,13 +272,31 @@ private fun NoPlaylist(onAddPlaylist: () -> Unit) {
 private fun GroupsColumn(
     state: BrowseUiState,
     focusOnStart: Boolean,
+    /** Each new value scrolls to the top and focuses the first group (All channels). */
+    topRequest: Int,
+    onTopFocusChanged: (Boolean) -> Unit,
     onSelect: (ChannelList) -> Unit,
+    /** OK or Right on a group: open it and go to its first channel. */
+    onEnterChannels: (GroupRow) -> Unit,
+    onGroupFocused: (ChannelList) -> Unit,
     onTogglePinned: (GroupRow) -> Unit,
     onOptions: (GroupRow) -> Unit,
 ) {
-    val focusManager = LocalFocusManager.current
+    val listState = rememberLazyListState()
     val firstGroup = remember { FocusRequester() }
+    var topFocused by remember { mutableStateOf(false) }
     LaunchedEffect(focusOnStart) { if (focusOnStart) firstGroup.requestFocus() }
+    LaunchedEffect(topRequest) {
+        if (topRequest == 0) return@LaunchedEffect
+        listState.scrollToItem(0)
+        // Coming from outside the column, the focus restorer sends the first request to the group
+        // focused last; the next one, from inside, reaches the top.
+        repeat(RETURN_FOCUS_FRAMES) {
+            withFrameNanos {}
+            if (topFocused) return@LaunchedEffect
+            if (listState.layoutInfo.visibleItemsInfo.any { it.index == 0 }) firstGroup.requestFocus()
+        }
+    }
 
     // Moving through groups shows each one's channels, but only once focus rests, so holding
     // the D-pad down doesn't start a query per group.
@@ -269,6 +307,7 @@ private fun GroupsColumn(
     }
 
     LazyColumn(
+        state = listState,
         contentPadding = PaddingValues(vertical = 8.dp),
         modifier = Modifier
             .width(320.dp)
@@ -278,10 +317,7 @@ private fun GroupsColumn(
         items(state.groups, key = { it.list.encode() }) { group ->
             DenseListItem(
                 selected = group.list == state.selectedList,
-                onClick = {
-                    onSelect(group.list)
-                    focusManager.moveFocus(FocusDirection.Right)
-                },
+                onClick = { onEnterChannels(group) },
                 // Long-press OK: pin, and rename or delete the user's own; Menu (☰) pins at once.
                 onLongClick = if (group.pinnable) {
                     { onOptions(group) }
@@ -293,14 +329,38 @@ private fun GroupsColumn(
                 },
                 trailingContent = { Text("%,d".format(group.channelCount)) },
                 modifier = Modifier
-                    .then(if (group.list == ChannelList.All) Modifier.focusRequester(firstGroup) else Modifier)
-                    .onFocusChanged { if (it.isFocused) focusedGroup = group.list }
-                    .onKeyEvent { event ->
-                        if (group.pinnable && event.type == KeyEventType.KeyDown && event.key == Key.Menu) {
-                            onTogglePinned(group)
-                            true
+                    .then(
+                        // All channels is always the first row.
+                        if (group.list == ChannelList.All) {
+                            Modifier
+                                .focusRequester(firstGroup)
+                                .onFocusChanged {
+                                    topFocused = it.isFocused
+                                    onTopFocusChanged(it.isFocused)
+                                }
                         } else {
-                            false
+                            Modifier
+                        },
+                    )
+                    .onFocusChanged {
+                        if (it.isFocused) {
+                            focusedGroup = group.list
+                            onGroupFocused(group.list)
+                        }
+                    }
+                    .onKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                        when {
+                            group.pinnable && event.key == Key.Menu -> {
+                                onTogglePinned(group)
+                                true
+                            }
+                            // Right goes to the group's first channel, not the one level with this row.
+                            event.key == Key.DirectionRight -> {
+                                onEnterChannels(group)
+                                true
+                            }
+                            else -> false
                         }
                     },
             )
@@ -313,6 +373,9 @@ private fun ChannelsColumn(
     state: BrowseUiState,
     channels: LazyPagingItems<ChannelRow>,
     returnTarget: ReturnTarget?,
+    /** When this is the open list, scroll to its top and focus its first channel, then call [onTopFocused]. */
+    focusTopFor: ChannelList?,
+    onTopFocused: () -> Unit,
     onPlayChannel: (Long) -> Unit,
     onToggleFavorite: (Long) -> Unit,
     onOptions: (Long) -> Unit,
@@ -353,7 +416,26 @@ private fun ChannelsColumn(
         // A fresh list state per group, so a new group starts at its top.
         val listState = remember(state.selectedList) { LazyListState() }
         val returnFocus = remember { FocusRequester() }
+        val topFocus = remember { FocusRequester() }
         val listIdle by rememberScrollIdle(listState)
+        LaunchedEffect(focusTopFor, listState) {
+            // The open list may still be the previous group for a frame or two after OK/Right.
+            if (focusTopFor == null || focusTopFor != state.selectedList) return@LaunchedEffect
+            listState.scrollToItem(0)
+            repeat(RETURN_FOCUS_FRAMES) {
+                withFrameNanos {}
+                val first = channels.peek(0)
+                // Wait for this group's first page, so focus doesn't land on a row about to be replaced.
+                if (channels.loadState.refresh is LoadState.NotLoading && first != null &&
+                    listState.layoutInfo.visibleItemsInfo.any { it.key == first.id }
+                ) {
+                    topFocus.requestFocus()
+                    onTopFocused()
+                    return@LaunchedEffect
+                }
+            }
+            onTopFocused()
+        }
         LaunchedEffect(returnTarget) {
             val target = returnTarget ?: return@LaunchedEffect
             listState.scrollToItem(target.index)
@@ -367,12 +449,11 @@ private fun ChannelsColumn(
                 withFrameNanos {}
             }
         }
+        // No focus restorer here: coming from the groups always lands on the first channel (see above).
         LazyColumn(
             state = listState,
             contentPadding = PaddingValues(vertical = 8.dp),
-            modifier = Modifier
-                .fillMaxSize()
-                .focusRestorer(),
+            modifier = Modifier.fillMaxSize(),
         ) {
             items(count = channels.itemCount, key = channels.itemKey { it.id }) { index ->
                 val channel = channels[index]
@@ -386,7 +467,9 @@ private fun ChannelsColumn(
                         onToggleFavorite = { onToggleFavorite(channel.id) },
                         onOptions = { onOptions(channel.id) },
                         logosMayDownload = listIdle,
-                        modifier = if (channel.id == returnTarget?.channelId) Modifier.focusRequester(returnFocus) else Modifier,
+                        modifier = Modifier
+                            .then(if (channel.id == returnTarget?.channelId) Modifier.focusRequester(returnFocus) else Modifier)
+                            .then(if (index == 0) Modifier.focusRequester(topFocus) else Modifier),
                     )
                 }
             }
