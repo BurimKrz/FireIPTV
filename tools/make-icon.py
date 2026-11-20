@@ -5,6 +5,8 @@ Writes:
   core/ui/src/main/res/drawable/ic_launcher.xml   square app icon, "Fire" over "IPTV"
   core/ui/src/main/res/drawable/wordmark.xml      one-line wordmark, no background (home header)
   app/src/main/res/drawable/banner.xml            Fire TV launcher banner, one line
+  app/src/beta/res/drawable/ic_launcher.xml       FireIPTV Beta: the same, with a BETA badge
+  app/src/beta/res/drawable/banner.xml
 and PNG previews (Pillow) of each into OUTDIR.
 
 Usage: PYTHONPATH=<dir with fonttools> python3 tools/make-icon.py OUTDIR [FONT [FONT_INDEX]] [--write]
@@ -19,6 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIRE = ("#FFFFA726", "#FFFF3D1F")   # orange at the top, red at the bottom
 IPTV = "#FFF2F3F7"
 BG = ("#FF23263A", "#FF0B0C11")
+BADGE, BADGE_TEXT = "#FF26C6DA", "#FF0B0C11"   # cyan pill, dark letters: far from the flame colours
 
 class PathPen(BasePen):
     """Records a glyph as an M/L/C/Z path string, flipped to y-down and placed at (dx, base)."""
@@ -74,6 +77,21 @@ def icon(font, track):
     fire, _ = font.path("Fire", cap, (W - wf) / 2, 50, track)
     iptv, _ = font.path("IPTV", cap, (W - wi) / 2, 84, track)
     return background(W, W) + [dict(d=fire, grad=((54, 24), (54, 50), *FIRE)), dict(d=iptv, fill=IPTV)]
+
+def pill(x0, y0, x1, y1):
+    """A rounded bar with half-circle ends, as one closed path."""
+    r = (y1 - y0) / 2; k = 0.5523 * r; f = lambda *p: " ".join(f"{p[i]:.2f},{p[i+1]:.2f}" for i in range(0, len(p), 2))
+    return (f"M{f(x0 + r, y0)} L{f(x1 - r, y0)} C{f(x1 - r + k, y0, x1, y0 + r - k, x1, y0 + r)} "
+            f"C{f(x1, y0 + r + k, x1 - r + k, y1, x1 - r, y1)} L{f(x0 + r, y1)} "
+            f"C{f(x0 + r - k, y1, x0, y0 + r + k, x0, y0 + r)} C{f(x0, y0 + r - k, x0 + r - k, y0, x0 + r, y0)} Z")
+
+def badge(font, cx, cy, cap, track=0.06):
+    """A cyan "BETA" pill centred on (cx, cy), letters cap tall."""
+    w = font.width("BETA", track) * cap / font.cap
+    pad_x, pad_y = cap * 0.7, cap * 0.45
+    text, _ = font.path("BETA", cap, cx - w / 2, cy + cap / 2, track)
+    return [dict(d=pill(cx - w / 2 - pad_x, cy - cap / 2 - pad_y, cx + w / 2 + pad_x, cy + cap / 2 + pad_y), fill=BADGE),
+            dict(d=text, fill=BADGE_TEXT)]
 
 def fitted(font, W, H, margin, track):
     """One-line wordmark as large as fits W wide with margin."""
@@ -167,7 +185,21 @@ if __name__ == "__main__":
     render(ic, 108, 108, 4, f"{outdir}/icon.png")
     render(bn, 320, 180, 2, f"{outdir}/banner.png")
     render(background(wm_w, wm_h) + wm, wm_w, wm_h, 3, f"{outdir}/wordmark.png")
+    # Beta: the icon's two lines move up a little to make room for the pill below them.
+    beta_ic = [dict(sh, d=re.sub(r"(-?[\d.]+),(-?[\d.]+)", lambda m: f"{m.group(1)},{float(m.group(2)) - 7:.2f}", sh["d"]),
+                    **({"grad": (sh["grad"][0], (sh["grad"][1][0], sh["grad"][1][1] - 7), *sh["grad"][2:])} if "grad" in sh else {}))
+               if i > 0 else sh for i, sh in enumerate(ic)]
+    beta_ic += badge(font, 54, 92, 9)
+    beta_bn = background(320, 180) + fitted(font, 320, 180, 22, track)
+    beta_bn = beta_bn[:1] + [dict(sh, d=re.sub(r"(-?[\d.]+),(-?[\d.]+)", lambda m: f"{m.group(1)},{float(m.group(2)) - 16:.2f}", sh["d"]),
+                                 **({"grad": ((sh["grad"][0][0], sh["grad"][0][1] - 16), (sh["grad"][1][0], sh["grad"][1][1] - 16), *sh["grad"][2:])} if "grad" in sh else {}))
+                            for sh in beta_bn[1:]] + badge(font, 160, 140, 16)
+    render(beta_ic, 108, 108, 4, f"{outdir}/icon-beta.png")
+    render(beta_bn, 320, 180, 2, f"{outdir}/banner-beta.png")
     if "--write" in sys.argv:
         open(f"{ROOT}/core/ui/src/main/res/drawable/ic_launcher.xml", "w").write(vector(ic, 108, 108))
         open(f"{ROOT}/core/ui/src/main/res/drawable/wordmark.xml", "w").write(vector(wm, wm_w, wm_h))
         open(f"{ROOT}/app/src/main/res/drawable/banner.xml", "w").write(vector(bn, 320, 180))
+        os.makedirs(f"{ROOT}/app/src/beta/res/drawable", exist_ok=True)
+        open(f"{ROOT}/app/src/beta/res/drawable/ic_launcher.xml", "w").write(vector(beta_ic, 108, 108))
+        open(f"{ROOT}/app/src/beta/res/drawable/banner.xml", "w").write(vector(beta_bn, 320, 180))

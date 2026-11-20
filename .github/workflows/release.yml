@@ -1,5 +1,7 @@
-# Pushing a tag v<appVersion> builds the signed release APK and publishes it as a GitHub release,
-# which the app finds with its daily update check.
+# Pushing a tag v<appVersion> builds FireIPTV's signed release APK and publishes it as a GitHub
+# release, which the app finds with its daily update check. A tag v<betaVersion> (like
+# v1.1.0-beta.2) builds FireIPTV Beta instead and publishes it as a pre-release: only the beta
+# app looks at those.
 #
 # Needs four repository secrets (Settings → Secrets and variables → Actions):
 #   FIREIPTV_KEYSTORE_BASE64   base64 of ~/.android/fireiptv-release.jks
@@ -24,12 +26,22 @@ jobs:
       - name: Check the tag matches the app version
         id: version
         run: |
-          version=$(sed -nE 's/^val appVersion = "(.*)"/\1/p' app/build.gradle.kts)
+          case "$GITHUB_REF_NAME" in
+            *-beta.*) variable=betaVersion; flavor=beta; task=assembleBetaRelease; name=FireIPTV-Beta; prerelease=true ;;
+            *)        variable=appVersion;  flavor=stable; task=assembleStableRelease; name=FireIPTV; prerelease=false ;;
+          esac
+          version=$(sed -nE "s/^val $variable = \"(.*)\"/\\1/p" app/build.gradle.kts)
           if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::Tag is $GITHUB_REF_NAME but app/build.gradle.kts says $version"
+            echo "::error::Tag is $GITHUB_REF_NAME but $variable in app/build.gradle.kts is $version"
             exit 1
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$version"
+            echo "flavor=$flavor"
+            echo "task=$task"
+            echo "apk=$name-$version.apk"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-java@v5
         with:
@@ -54,15 +66,18 @@ jobs:
             echo "::error::FIREIPTV_KEYSTORE_BASE64 isn't base64. Paste the output of: base64 -w0 ~/.android/fireiptv-release.jks"
             exit 1
           fi
-          ./gradlew --no-configuration-cache :app:assembleRelease \
+          ./gradlew --no-configuration-cache :app:${{ steps.version.outputs.task }} \
             -Pfireiptv.keystore="$RUNNER_TEMP/release.jks" \
             -Pfireiptv.keystorePassword="$KEYSTORE_PASSWORD" \
             -Pfireiptv.keyAlias="$KEY_ALIAS" \
             -Pfireiptv.keyPassword="$KEY_PASSWORD"
           rm "$RUNNER_TEMP/release.jks"
-          cp app/build/outputs/apk/release/app-release.apk "FireIPTV-${{ steps.version.outputs.version }}.apk"
+          cp "app/build/outputs/apk/${{ steps.version.outputs.flavor }}/release/app-${{ steps.version.outputs.flavor }}-release.apk" "${{ steps.version.outputs.apk }}"
 
       - uses: softprops/action-gh-release@v2
         with:
-          files: FireIPTV-${{ steps.version.outputs.version }}.apk
+          files: ${{ steps.version.outputs.apk }}
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          # A beta never becomes GitHub's "latest", so FireIPTV never offers it.
+          make_latest: ${{ steps.version.outputs.prerelease == 'false' }}
           generate_release_notes: true

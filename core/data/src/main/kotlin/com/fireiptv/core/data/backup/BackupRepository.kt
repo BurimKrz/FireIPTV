@@ -11,6 +11,7 @@ import android.util.JsonReader
 import android.util.JsonToken
 import android.util.JsonWriter
 import androidx.room.withTransaction
+import com.fireiptv.core.data.AppEdition
 import com.fireiptv.core.data.db.FavoriteEntity
 import com.fireiptv.core.data.db.HiddenChannelEntity
 import com.fireiptv.core.data.db.PlayerDatabase
@@ -63,8 +64,12 @@ class BackupRepository @Inject constructor(
     private val libraryDao = db.libraryDao()
     private val userListDao = db.userListDao()
 
+    // FireIPTV Beta keeps its own file, so a backup from one app never replaces the other's.
+    private val beta = AppEdition.of(context) == AppEdition.Beta
+    private val fileName = if (beta) BETA_FILE_NAME else FILE_NAME
+
     /** Where the file goes, for messages. */
-    val location: String = "${Environment.DIRECTORY_PICTURES}/$FILE_NAME"
+    val location: String = "${Environment.DIRECTORY_PICTURES}/$fileName"
 
     suspend fun save(): BackupSummary = withContext(Dispatchers.IO) {
         val playlist = playlists.activePlaylistEntity() ?: throw BackupException("There is no playlist yet, so nothing to back up")
@@ -204,7 +209,7 @@ class BackupRepository @Inject constructor(
     private fun write(png: ByteArray) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).apply { mkdirs() }
-            File(dir, FILE_NAME).writeBytes(png)
+            File(dir, fileName).writeBytes(png)
             return
         }
         val resolver = context.contentResolver
@@ -214,7 +219,7 @@ class BackupRepository @Inject constructor(
         val uri = backups(ownOnly = true).firstOrNull() ?: resolver.insert(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             ContentValues().apply {
-                put(MediaStore.MediaColumns.DISPLAY_NAME, FILE_NAME)
+                put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
                 put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
                 put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES)
             },
@@ -222,10 +227,14 @@ class BackupRepository @Inject constructor(
         (resolver.openOutputStream(uri, "wt") ?: throw IOException("the file couldn't be opened")).use { it.write(png) }
     }
 
-    /** The newest backup's bytes, or null if there is none this app may see. */
+    /**
+     * The newest backup's bytes, or null if there is none this app may see. FireIPTV Beta falls
+     * back to FireIPTV's backup, so it can start from the same login and favourites.
+     */
     private fun read(): ByteArray? {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            for (uri in backups(ownOnly = false)) {
+            val found = backups(ownOnly = false) + if (beta) backups(ownOnly = false, pattern = STABLE_PATTERN) else emptyList()
+            for (uri in found) {
                 val bytes = try {
                     context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 } catch (e: IOException) {
@@ -236,15 +245,15 @@ class BackupRepository @Inject constructor(
                 if (bytes != null && BackupImage.decode(bytes) != null) return bytes
             }
         }
-        val file = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), FILE_NAME)
-        return if (file.canRead()) file.readBytes() else null
+        val pictures = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+        return listOf(fileName, FILE_NAME).distinct().map { File(pictures, it) }.firstOrNull { it.canRead() }?.readBytes()
     }
 
     /**
      * Backup images, newest first. MediaStore lists the app's own images, plus other ones when it
      * has the photos permission; [ownOnly] keeps just the app's own.
      */
-    private fun backups(ownOnly: Boolean): List<Uri> {
+    private fun backups(ownOnly: Boolean, pattern: String = if (beta) BETA_PATTERN else STABLE_PATTERN): List<Uri> {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return emptyList()
         val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         val selection = buildString {
@@ -252,9 +261,9 @@ class BackupRepository @Inject constructor(
             if (ownOnly && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) append(" AND ${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ?")
         }
         val args = if (ownOnly && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            arrayOf("FireIPTV-backup%.png", context.packageName)
+            arrayOf(pattern, context.packageName)
         } else {
-            arrayOf("FireIPTV-backup%.png")
+            arrayOf(pattern)
         }
         val uris = ArrayList<Uri>()
         context.contentResolver.query(
@@ -380,6 +389,11 @@ class BackupRepository @Inject constructor(
 
     private companion object {
         const val FILE_NAME = "FireIPTV-backup.png"
+        const val BETA_FILE_NAME = "FireIPTV-Beta-backup.png"
+
+        // MediaStore may have added " (1)" before the extension.
+        const val STABLE_PATTERN = "FireIPTV-backup%.png"
+        const val BETA_PATTERN = "FireIPTV-Beta-backup%.png"
         const val FORMAT = 1
     }
 }

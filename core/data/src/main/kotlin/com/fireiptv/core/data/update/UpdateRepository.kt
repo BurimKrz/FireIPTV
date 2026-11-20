@@ -12,6 +12,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.fireiptv.core.data.AppEdition
 import com.fireiptv.core.data.di.ApplicationScope
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -53,6 +54,9 @@ private val Context.updateStore: DataStore<Preferences> by preferencesDataStore(
  * Updates from the GitHub releases of the app's repository. A check is one small API request, made
  * at most once a day when the app opens ([checkIfDue]) or when asked for in Settings ([check]).
  * The APK is downloaded only on request, then handed to the system installer, which asks first.
+ *
+ * FireIPTV reads the "latest" release, which GitHub never sets to a pre-release; FireIPTV Beta
+ * reads only pre-releases (tags `v<version>-beta.<n>`). So each app updates only from its own.
  */
 @Singleton
 class UpdateRepository @Inject constructor(
@@ -62,6 +66,7 @@ class UpdateRepository @Inject constructor(
 ) {
     private val store = context.updateStore
     private val dir = File(context.cacheDir, "updates")
+    private val edition = AppEdition.of(context)
     private var job: Job? = null
 
     private val _state = MutableStateFlow<UpdateState>(UpdateState.Unknown)
@@ -142,13 +147,14 @@ class UpdateRepository @Inject constructor(
         }
     }
 
-    /** The latest published release that carries an APK, or null when there is none yet. */
+    /** The newest published release for this app that carries an APK, or null when there is none yet. */
     private suspend fun fetchLatest(): Release? = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(LATEST_RELEASE_API).header("Accept", "application/vnd.github+json").build()
+        val url = if (edition == AppEdition.Beta) RELEASES_API else LATEST_RELEASE_API
+        val request = Request.Builder().url(url).header("Accept", "application/vnd.github+json").build()
         client.newCall(request).execute().use { response ->
             if (response.code == 404) return@withContext null
             if (!response.isSuccessful) throw IOException("HTTP ${response.code}")
-            JsonReader(response.body.charStream()).use { readRelease(it) }
+            JsonReader(response.body.charStream()).use { if (edition == AppEdition.Beta) readNewestBeta(it) else readRelease(it) }
         }
     }
 
@@ -226,6 +232,9 @@ class UpdateRepository @Inject constructor(
 
     private companion object {
         const val LATEST_RELEASE_API = "https://api.github.com/repos/BurimKrz/FireIPTV/releases/latest"
+
+        /** Newest first; the 30 most recent releases easily include the newest beta. */
+        const val RELEASES_API = "https://api.github.com/repos/BurimKrz/FireIPTV/releases?per_page=30"
         const val APK_TYPE = "application/vnd.android.package-archive"
         const val CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L
 
@@ -237,13 +246,33 @@ class UpdateRepository @Inject constructor(
 }
 
 /** Reads `tag_name` and the first `.apk` asset of a GitHub release; null when it has no APK. */
-internal fun readRelease(reader: JsonReader): Release? {
+internal fun readRelease(reader: JsonReader): Release? = readReleaseObject(reader).first
+
+/**
+ * From a `/releases` list (newest first), the first pre-release with a `-beta.` tag and an APK;
+ * null when there is none.
+ */
+internal fun readNewestBeta(reader: JsonReader): Release? {
+    var newest: Release? = null
+    reader.beginArray()
+    while (reader.hasNext()) {
+        val (release, prerelease) = readReleaseObject(reader)
+        if (newest == null && prerelease && release != null && "-beta." in release.version) newest = release
+    }
+    reader.endArray()
+    return newest
+}
+
+/** One release object: the release (null without an APK) and whether it's a pre-release. */
+private fun readReleaseObject(reader: JsonReader): Pair<Release?, Boolean> {
     var tag: String? = null
+    var prerelease = false
     var asset: Pair<String, Long>? = null
     reader.beginObject()
     while (reader.hasNext()) {
         when (reader.nextName()) {
             "tag_name" -> tag = reader.nextString()
+            "prerelease" -> prerelease = reader.nextBoolean()
             "assets" -> {
                 reader.beginArray()
                 while (reader.hasNext()) {
@@ -268,14 +297,21 @@ internal fun readRelease(reader: JsonReader): Release? {
         }
     }
     reader.endObject()
-    val version = tag?.removePrefix("v") ?: return null
-    val (url, size) = asset ?: return null
-    return Release(version, url, size)
+    val version = tag?.removePrefix("v") ?: return null to prerelease
+    val (url, size) = asset ?: return null to prerelease
+    return Release(version, url, size) to prerelease
 }
 
-/** True when [candidate] (like "0.2.0") is a later version than [installed]. */
+/**
+ * True when [candidate] (like "0.2.0" or "1.1.0-beta.3") is a later version than [installed].
+ * Betas count up within their version, and come before its final release.
+ */
 internal fun isNewer(candidate: String, installed: String): Boolean {
-    fun parts(v: String) = v.substringBefore('-').split('.').map { it.toIntOrNull() ?: 0 }
+    fun parts(v: String): List<Int> {
+        val main = v.substringBefore('-').split('.').map { it.toIntOrNull() ?: 0 }.let { it + List(maxOf(0, 3 - it.size)) { 0 } }
+        val beta = if ('-' in v) v.substringAfter("-beta.", "").toIntOrNull() ?: 0 else Int.MAX_VALUE
+        return main + beta
+    }
     val a = parts(candidate)
     val b = parts(installed)
     for (i in 0 until maxOf(a.size, b.size)) {

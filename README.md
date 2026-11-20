@@ -109,9 +109,10 @@ TV guide (EPG), catch-up, movies and series, parental PIN (hide groups instead),
 **Build.** JDK 17 and the Android SDK (platform 37.2, build-tools 37); `local.properties` with `sdk.dir=...`.
 
 ```bash
-./gradlew assembleDebug                          # debug build (~22 MB, debug key)
-./gradlew assembleRelease                        # release build (~3.7 MB, R8, release key)
-./gradlew :core:parser:test lintDebug            # JVM tests and lint, as CI runs them
+./gradlew assembleStableDebug                    # FireIPTV, debug build (~22 MB, debug key)
+./gradlew assembleBetaDebug                      # FireIPTV Beta, debug build
+./gradlew assembleStableRelease                  # release build (~3.7 MB, R8, release key)
+./gradlew :core:parser:test lintDebug :app:lintStableDebug :app:lintBetaDebug   # JVM tests and lint, as CI runs them
 ./gradlew connectedDebugAndroidTest              # database, import, player tests on an emulator
 emulator -avd FireOS8_API30_TV &                 # Android TV API 30 = Fire OS 8
 ```
@@ -120,7 +121,11 @@ Debug and release builds have different keys: switching a device between them ne
 
 **Release key.** `~/.android/fireiptv-release.jks`, with its path and passwords as `fireiptv.*` lines in `~/.gradle/gradle.properties`. Keep a copy off this PC: without it, no update can install over the app on the TV.
 
-**Branches and releases.** Work happens on `dev`; CI (`.github/workflows/ci.yml`) builds, lints and tests every push and pull request. A release: raise `appVersion` in `app/build.gradle.kts`, merge `dev` into `main` by pull request, then `git tag v<version> && git push origin v<version>`. `release.yml` builds the signed APK from four secrets (`FIREIPTV_KEYSTORE_BASE64`, `FIREIPTV_KEYSTORE_PASSWORD`, `FIREIPTV_KEY_ALIAS`, `FIREIPTV_KEY_PASSWORD`) and publishes `FireIPTV-<version>.apk`; the app finds it. "base64: invalid input" means the first secret was pasted wrong.
+**Two apps.** The `stable` and `beta` flavors build FireIPTV (`com.fireiptv.player`) and FireIPTV Beta (`com.fireiptv.player.beta`, BETA badge, its own data, settings and backup file). They install side by side; Beta's Restore can also read FireIPTV's backup. `AppEdition` tells the code which one is running.
+
+**Branches and releases.** New work happens on `Beta`; `dev` and `main` carry FireIPTV's stable releases and fixes (merge `dev` into `Beta` after each one). CI builds both branches; CI (`.github/workflows/ci.yml`) builds, lints and tests every push and pull request. A release: raise `appVersion` in `app/build.gradle.kts`, merge `dev` into `main` by pull request, then `git tag v<version> && git push origin v<version>`. `release.yml` builds the signed APK from four secrets (`FIREIPTV_KEYSTORE_BASE64`, `FIREIPTV_KEYSTORE_PASSWORD`, `FIREIPTV_KEY_ALIAS`, `FIREIPTV_KEY_PASSWORD`) and publishes `FireIPTV-<version>.apk`; the app finds it. "base64: invalid input" means the first secret was pasted wrong.
+
+A beta release: raise `betaVersion` (`1.1.0-beta.N`) on `Beta`, then tag `v<betaVersion>`. `release.yml` builds the beta flavor and publishes `FireIPTV-Beta-<version>.apk` as a GitHub pre-release. FireIPTV only reads GitHub's "latest" release, which is never a pre-release; FireIPTV Beta reads only pre-releases.
 
 **MP2 audio** comes from a prebuilt FFmpeg decoder in `core/ffmpeg/src/main/jniLibs`; rebuild it with `tools/build-ffmpeg.sh` only after a Media3 update (see `core/ffmpeg/README.md`).
 

@@ -1,10 +1,10 @@
-# Every push to dev and every pull request: does it build, is lint clean, and do the JVM tests pass?
+# Every push to dev or Beta and every pull request: does it build, is lint clean, and do the JVM tests pass?
 # The release build here is unsigned (no secrets on pull requests); release.yml signs tagged builds.
 name: CI
 
 on:
   push:
-    branches: [dev]
+    branches: [dev, Beta]
   pull_request:
 
 permissions:
@@ -24,4 +24,5 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
 
       - name: Build and test
-        run: ./gradlew :core:parser:test lintDebug :app:assembleDebug :app:assembleRelease
+        # lintDebug skips the app module, which has a variant per flavor: lint both by name.
+        run: ./gradlew :core:parser:test lintDebug :app:lintStableDebug :app:lintBetaDebug :app:assembleDebug :app:assembleRelease

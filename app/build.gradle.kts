@@ -7,15 +7,41 @@ plugins {
 
 val appVersion = "1.0.2"
 
+/** FireIPTV Beta's version: push the tag v<betaVersion> and CI publishes it as a GitHub pre-release. */
+val betaVersion = "1.1.0-beta.1"
+
+/** 1.0.2 → 10002. A beta adds two digits for its number: 1.1.0-beta.3 → 1010003. */
+fun versionCodeOf(version: String): Int {
+    val (major, minor, patch) = version.substringBefore('-').split('.').map(String::toInt)
+    val code = major * 10_000 + minor * 100 + patch
+    val beta = version.substringAfter("-beta.", "").toIntOrNull() ?: return code
+    return code * 100 + beta
+}
+
 android {
     namespace = "com.fireiptv.player"
 
     defaultConfig {
         applicationId = "com.fireiptv.player"
         targetSdk = 36
-        // Bump appVersion, then push the tag v<appVersion>: CI builds the release and the app finds it.
-        versionName = appVersion
-        versionCode = appVersion.split('.').map(String::toInt).let { (major, minor, patch) -> major * 10_000 + minor * 100 + patch }
+    }
+
+    // Two apps from one codebase, installed side by side: FireIPTV, and FireIPTV Beta for trying
+    // new things (its own data, settings and updates). Bump the version, then push the tag
+    // v<version>: CI builds that app's release and the app finds it.
+    flavorDimensions += "edition"
+    productFlavors {
+        create("stable") {
+            dimension = "edition"
+            versionName = appVersion
+            versionCode = versionCodeOf(appVersion)
+        }
+        create("beta") {
+            dimension = "edition"
+            applicationIdSuffix = ".beta"
+            versionName = betaVersion
+            versionCode = versionCodeOf(betaVersion)
+        }
     }
 
     // The release key lives outside the repo; its path and passwords come from ~/.gradle/gradle.properties
