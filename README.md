@@ -33,7 +33,7 @@ adb shell "am start -n com.fireiptv.player/.MainActivity --es playlist_url 'http
 | Key | Does |
 | --- | --- |
 | Up / Down in the groups column | All channels, Favourites, Recently watched, pinned groups, your categories, the provider's groups |
-| OK on a group | Into its channels |
+| OK or Right on a group | Into its channels, on the first one |
 | OK on a channel | Plays it |
 | Menu (☰) on a channel | Favourite on or off (★) |
 | Long-press OK on a channel | Favourites, your categories (✓), **New category…**, **Hide channel**; in Favourites or a category also **Move up** / **Move down** |
@@ -41,7 +41,7 @@ adb shell "am start -n com.fireiptv.player/.MainActivity --es playlist_url 'http
 | Long-press OK on a group or category | Pin; for your own categories also Rename and Delete (press twice) |
 | **Playlists** (top right) | Picks which playlist home shows (✓ marks it), **Add playlist…**, or **Edit playlists…** (Settings → Playlists). Search, groups, hidden channels, Account and Backup follow the one picked; a playlist you add is shown right away |
 | **Search** (top right) | Searches every channel by name as you type, hidden ones included; case and accents don't matter ("kosove" finds "KOSOVË") |
-| Back | Press twice to leave the app |
+| Back | One step at a time: from the channels to their group, then to All channels at the top; there, press twice to leave the app |
 
 **Watching**
 
