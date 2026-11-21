@@ -7,8 +7,10 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.map
 import com.fireiptv.core.data.db.MovieEntity
+import com.fireiptv.core.data.db.WatchProgressEntity
 import com.fireiptv.core.data.playlist.PlaylistRepository
 import com.fireiptv.core.data.vod.MovieRepository
+import com.fireiptv.core.data.vod.WatchProgressRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -33,8 +35,17 @@ import javax.inject.Inject
 @Immutable
 data class MovieCategoryRow(val id: Long, val title: String, val movieCount: Int?, val loaded: Boolean)
 
+/** [id] is the row's key in its list; [playlistId] and [streamId] open the movie. */
 @Immutable
-data class MovieRow(val id: Long, val name: String, val year: Int?, val posterUrl: String?, val rating: Float?)
+data class MovieRow(
+    val id: Long,
+    val playlistId: Long,
+    val streamId: String,
+    val name: String,
+    val year: Int?,
+    val posterUrl: String?,
+    val rating: Float?,
+)
 
 /** A download the user is waiting for. No entry means done (or not started). */
 sealed interface Load {
@@ -50,13 +61,26 @@ data class MovieReturn(val movieId: Long, val index: Int)
 class MoviesViewModel @Inject constructor(
     playlists: PlaylistRepository,
     private val repository: MovieRepository,
+    private val progress: WatchProgressRepository,
 ) : ViewModel() {
 
     private val playlistId = playlists.activePlaylist.map { it?.id }.distinctUntilChanged()
 
-    val categories: StateFlow<List<MovieCategoryRow>> = playlistId
+    /** The provider's categories; empty until downloaded. */
+    private val providerCategories: Flow<List<MovieCategoryRow>> = playlistId
         .flatMapLatest { id -> if (id == null) flowOf(emptyList()) else repository.categories(id) }
         .map { rows -> rows.map { MovieCategoryRow(it.id, it.title, it.movieCount, it.loadedAt != null) } }
+
+    /** Continue watching on top, while some movie is stopped part-way, then the provider's categories. */
+    val categories: StateFlow<List<MovieCategoryRow>> = playlistId
+        .flatMapLatest { id -> if (id == null) flowOf(0) else progress.continueWatchingCount(id) }
+        .combine(providerCategories) { unfinished, provider ->
+            if (unfinished == 0 || provider.isEmpty()) {
+                provider
+            } else {
+                listOf(MovieCategoryRow(CONTINUE_WATCHING_ID, "Continue watching", unfinished, loaded = true)) + provider
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _categoriesLoad = MutableStateFlow<Load?>(null)
@@ -68,9 +92,14 @@ class MoviesViewModel @Inject constructor(
     private val _moviesLoad = MutableStateFlow<Map<Long, Load>>(emptyMap())
     val moviesLoad: StateFlow<Map<Long, Load>> = _moviesLoad.asStateFlow()
 
-    val movies: Flow<PagingData<MovieRow>> = _selected
-        .flatMapLatest { id -> if (id == null) flowOf(PagingData.empty()) else repository.movies(id) }
-        .map { page -> page.map { it.toRow() } }
+    val movies: Flow<PagingData<MovieRow>> = combine(playlistId, _selected, ::Pair)
+        .flatMapLatest { (playlist, id) ->
+            when {
+                playlist == null || id == null -> flowOf(PagingData.empty())
+                id == CONTINUE_WATCHING_ID -> progress.continueWatching(playlist).map { page -> page.map { it.toRow() } }
+                else -> repository.movies(id).map { page -> page.map { it.toRow() } }
+            }
+        }
         .cachedIn(viewModelScope)
 
     /** True while Movies is on screen: only then does the category list download. */
@@ -82,7 +111,7 @@ class MoviesViewModel @Inject constructor(
         // Opening Movies, switching playlist while on it, or a refresh that dropped the lists:
         // fetch the category list (a few kB) if it isn't here.
         viewModelScope.launch {
-            combine(playlistId, visible, categories.map { it.isEmpty() }.distinctUntilChanged(), ::Triple)
+            combine(playlistId, visible, providerCategories.map { it.isEmpty() }.distinctUntilChanged(), ::Triple)
                 .collectLatest { (id, shown, empty) -> if (id != null && shown && empty) loadCategories(id) }
         }
         viewModelScope.launch {
@@ -143,5 +172,12 @@ class MoviesViewModel @Inject constructor(
     /** The movie whose page was opened last, once. */
     fun takeReturn(): MovieReturn? = returnTo.also { returnTo = null }
 
-    private fun MovieEntity.toRow() = MovieRow(id, name, year, posterUrl(posterUrl, PosterSize.Thumbnail), rating)
+    private fun MovieEntity.toRow() = MovieRow(id, playlistId, streamId, name, year, posterUrl(posterUrl, PosterSize.Thumbnail), rating)
+
+    private fun WatchProgressEntity.toRow() = MovieRow(id, playlistId, streamId, name, year, posterUrl(posterUrl, PosterSize.Thumbnail), rating)
+
+    companion object {
+        /** Not a category id (those start at 1): the Continue watching row. */
+        const val CONTINUE_WATCHING_ID = -1L
+    }
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Rebuilds core/ffmpeg/src/main/jniLibs/<abi>/libffmpegJNI.so: FFmpeg with only the MPEG audio
-# decoder (MP1/MP2/MP3), linked with media3's JNI wrapper. Run it after a media3 version bump.
+# decoder (MP1/MP2/MP3) and DTS, linked with media3's JNI wrapper. Run it after a media3 version bump.
 #
 #   tools/build-ffmpeg.sh [work dir, default ~/build-ffmpeg]
 #
@@ -13,7 +13,9 @@ MEDIA3_VERSION="$(sed -nE 's/^media3 = "(.*)"/\1/p' "$REPO/gradle/libs.versions.
 FFMPEG_BRANCH="release/6.0" # what media3's decoder_ffmpeg README recommends
 NDK="${NDK:-$HOME/Android/Sdk/ndk/28.2.13676358}"
 MIN_SDK=25
-DECODERS=(mp3) # FFmpeg's mp3 decoder handles all three MPEG audio layers
+# mp3 handles all three MPEG audio layers (MP2 on live channels); dca is DTS, which some movies
+# have and the Fire TV Stick can only pass through to a receiver, not decode.
+DECODERS=(mp3 dca)
 OUT="$REPO/core/ffmpeg/src/main/jniLibs"
 
 mkdir -p "$WORK"

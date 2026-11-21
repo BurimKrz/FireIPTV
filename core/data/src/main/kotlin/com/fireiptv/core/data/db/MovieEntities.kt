@@ -55,3 +55,31 @@ data class MovieEntity(
     /** Place in its category: newest added first. */
     val sortOrder: Int,
 )
+
+/**
+ * How far a movie was watched. Keyed by the provider's stream id, not the movie row, because a
+ * refresh deletes the movie rows; it keeps what Continue watching shows, so that row works before
+ * the movie's category is downloaded again.
+ */
+@Entity(
+    tableName = "watch_progress",
+    foreignKeys = [ForeignKey(PlaylistEntity::class, ["id"], ["playlistId"], onDelete = ForeignKey.CASCADE)],
+    indices = [Index("playlistId", "streamId", unique = true), Index("playlistId", "updatedAt")],
+)
+data class WatchProgressEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val playlistId: Long,
+    val streamId: String,
+    val name: String,
+    val year: Int?,
+    val posterUrl: String?,
+    val rating: Float?,
+    val extension: String,
+    val positionMs: Long,
+    /** 0 when the file doesn't say how long it is. */
+    val durationMs: Long,
+    /** Watched to the end (95%): it leaves Continue watching and plays from the start next time. */
+    val finished: Boolean,
+    /** Epoch millis of the last save; Continue watching shows the latest first. */
+    val updatedAt: Long,
+)

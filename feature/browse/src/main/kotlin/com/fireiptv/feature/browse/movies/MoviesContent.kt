@@ -58,7 +58,8 @@ import kotlinx.coroutines.delay
 /**
  * Home's Movies side: the provider's categories on the left, the open category's movies on the
  * right. It works like Live TV: OK or Right on a category lands on its first movie, and Back steps
- * out one level at a time (movies → their category → the first category → Live TV).
+ * out one level at a time (movies → their category → the first category → Live TV). While a movie
+ * is stopped part-way, Continue watching sits above the provider's categories.
  *
  * Data: the category list downloads when this first shows; a category's movies when focus rests
  * on it (longer than for one already downloaded, so passing over categories fetches nothing) or
@@ -66,7 +67,7 @@ import kotlinx.coroutines.delay
  */
 @Composable
 fun MoviesContent(
-    onOpenMovie: (Long) -> Unit,
+    onOpenMovie: (playlistId: Long, streamId: String) -> Unit,
     onBackToLive: () -> Unit,
     viewModel: MoviesViewModel = hiltViewModel(),
 ) {
@@ -130,9 +131,9 @@ fun MoviesContent(
             returnTarget = returnTarget,
             focusTopFor = moviesTopFor,
             onTopFocused = { moviesTopFor = null },
-            onOpen = { id, index ->
-                viewModel.rememberOpened(id, index)
-                onOpenMovie(id)
+            onOpen = { movie, index ->
+                viewModel.rememberOpened(movie.id, index)
+                onOpenMovie(movie.playlistId, movie.streamId)
             },
         )
     }
@@ -240,12 +241,13 @@ private fun MoviesColumn(
     returnTarget: MovieReturn?,
     focusTopFor: Long?,
     onTopFocused: () -> Unit,
-    onOpen: (id: Long, index: Int) -> Unit,
+    onOpen: (movie: MovieRow, index: Int) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
         Text(
             when {
                 category == null -> ""
+                category.movieCount == 1 -> "${category.title} · 1 movie"
                 category.movieCount != null -> "${category.title} · ${"%,d".format(category.movieCount)} movies"
                 else -> category.title
             },
@@ -319,7 +321,7 @@ private fun MoviesColumn(
                 } else {
                     MovieItem(
                         movie,
-                        onClick = { onOpen(movie.id, index) },
+                        onClick = { onOpen(movie, index) },
                         postersMayDownload = listIdle,
                         modifier = Modifier
                             .then(if (movie.id == returnTarget?.movieId) Modifier.focusRequester(returnFocus) else Modifier)

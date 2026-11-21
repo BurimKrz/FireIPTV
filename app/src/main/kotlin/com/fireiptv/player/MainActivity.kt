@@ -1,5 +1,6 @@
 package com.fireiptv.player
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +26,7 @@ import com.fireiptv.core.data.playlist.PlaylistRepository
 import com.fireiptv.core.data.settings.SettingsRepository
 import com.fireiptv.core.data.update.UpdateRepository
 import com.fireiptv.core.data.usage.DataUsageRepository
+import com.fireiptv.core.data.vod.Movie
 import com.fireiptv.core.ui.FireTheme
 import com.fireiptv.core.ui.LocalLogosEnabled
 import com.fireiptv.feature.browse.BrowseScreen
@@ -33,6 +35,8 @@ import com.fireiptv.feature.browse.movies.MovieInfoViewModel
 import com.fireiptv.feature.browse.search.SearchScreen
 import com.fireiptv.feature.player.PlayerScreen
 import com.fireiptv.feature.player.PlayerViewModel
+import com.fireiptv.feature.player.movie.MoviePlayerScreen
+import com.fireiptv.feature.player.movie.MoviePlayerViewModel
 import com.fireiptv.feature.settings.account.AccountScreen
 import com.fireiptv.feature.settings.groups.GroupsScreen
 import com.fireiptv.feature.settings.hidden.HiddenChannelsScreen
@@ -116,9 +120,13 @@ private object Routes {
     const val ACCOUNT = "settings/account"
     const val LOG = "settings/log"
     const val PLAYER = "player/{${PlayerViewModel.ARG_CHANNEL_ID}}?list={${PlayerViewModel.ARG_LIST}}"
-    const val MOVIE = "movie/{${MovieInfoViewModel.ARG_MOVIE_ID}}"
+    const val MOVIE = "movie/{${MovieInfoViewModel.ARG_PLAYLIST_ID}}/{${MovieInfoViewModel.ARG_STREAM_ID}}"
+    const val MOVIE_PLAYER =
+        "moviePlayer/{${MoviePlayerViewModel.ARG_PLAYLIST_ID}}/{${MoviePlayerViewModel.ARG_STREAM_ID}}?startMs={${MoviePlayerViewModel.ARG_START_MS}}"
 
-    fun movie(id: Long) = "movie/$id"
+    fun movie(playlistId: Long, streamId: String) = "movie/$playlistId/${Uri.encode(streamId)}"
+
+    fun moviePlayer(movie: Movie, startMs: Long) = "moviePlayer/${movie.playlistId}/${Uri.encode(movie.streamId)}?startMs=$startMs"
 
     fun player(channelId: Long, list: ChannelList) = "player/$channelId?list=${list.encode()}"
 }
@@ -141,14 +149,27 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
                 onAddPlaylist = { navController.navigate(Routes.ADD_PLAYLIST) },
                 onEditPlaylists = { navController.navigate(Routes.PLAYLISTS) },
                 onPlayChannel = { channelId, list -> navController.navigate(Routes.player(channelId, list)) },
-                onOpenMovie = { navController.navigate(Routes.movie(it)) },
+                onOpenMovie = { playlistId, streamId -> navController.navigate(Routes.movie(playlistId, streamId)) },
             )
         }
         composable(
             Routes.MOVIE,
-            arguments = listOf(navArgument(MovieInfoViewModel.ARG_MOVIE_ID) { type = NavType.LongType }),
+            arguments = listOf(
+                navArgument(MovieInfoViewModel.ARG_PLAYLIST_ID) { type = NavType.LongType },
+                navArgument(MovieInfoViewModel.ARG_STREAM_ID) { type = NavType.StringType },
+            ),
         ) {
-            MovieInfoScreen()
+            MovieInfoScreen(onPlay = { movie, startMs -> navController.navigate(Routes.moviePlayer(movie, startMs)) })
+        }
+        composable(
+            Routes.MOVIE_PLAYER,
+            arguments = listOf(
+                navArgument(MoviePlayerViewModel.ARG_PLAYLIST_ID) { type = NavType.LongType },
+                navArgument(MoviePlayerViewModel.ARG_STREAM_ID) { type = NavType.StringType },
+                navArgument(MoviePlayerViewModel.ARG_START_MS) { type = NavType.LongType },
+            ),
+        ) {
+            MoviePlayerScreen(onExit = { navController.popBackStack() })
         }
         composable(
             Routes.PLAYER,

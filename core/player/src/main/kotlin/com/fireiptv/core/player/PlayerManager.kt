@@ -3,12 +3,10 @@ package com.fireiptv.core.player
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
-import android.net.NetworkCapabilities
 import android.os.SystemClock
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.core.net.toUri
-import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -16,9 +14,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.common.util.Util
 import androidx.media3.datasource.HttpDataSource
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.hls.HlsMediaSource
@@ -91,22 +87,13 @@ class PlayerManager @Inject constructor(
     private val buffer: BufferSettings,
     private val log: AppLog,
 ) {
-    val player: ExoPlayer = ExoPlayer.Builder(context)
-        .setLoadControl(
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(buffer.minBufferMs, maxOf(buffer.minBufferMs, 30_000), buffer.startMs, buffer.resumeMs)
-                .setPrioritizeTimeOverSizeThresholds(true)
-                .build(),
-        )
-        .setRenderersFactory(
-            DefaultRenderersFactory(context)
-                .setEnableDecoderFallback(true)
-                // FFmpeg (:core:ffmpeg) only takes tracks the device can't decode, e.g. MP2 audio.
-                .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON),
-        )
-        .setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true)
-        .setHandleAudioBecomingNoisy(true)
-        .build()
+    val player: ExoPlayer = buildExoPlayer(
+        context,
+        DefaultLoadControl.Builder()
+            .setBufferDurationsMs(buffer.minBufferMs, maxOf(buffer.minBufferMs, 30_000), buffer.startMs, buffer.resumeMs)
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build(),
+    )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
@@ -357,10 +344,7 @@ class PlayerManager @Inject constructor(
     }
 
     private fun mediaSource(stream: StreamRequest): MediaSource {
-        val dataSource = OkHttpDataSource.Factory(client).apply {
-            stream.userAgent?.let { setUserAgent(it) }
-            stream.referrer?.let { setDefaultRequestProperties(mapOf("Referer" to it)) }
-        }
+        val dataSource = httpDataSource(client, stream)
         val item = MediaItem.fromUri(stream.url)
         return if (asHls) {
             HlsMediaSource.Factory(dataSource).createMediaSource(item)
@@ -406,28 +390,7 @@ class PlayerManager @Inject constructor(
         fail(error.toMessage(), httpCode)
     }
 
-    private fun PlaybackException.isNetworkError(): Boolean = when (errorCode) {
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-        PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
-        -> true
-        else -> false
-    }
-
-    private fun isOnline(): Boolean {
-        val manager = connectivity ?: return true
-        val capabilities = manager.getNetworkCapabilities(manager.activeNetwork) ?: return false
-        return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-    }
-
-    private fun PlaybackException.isRetryable(): Boolean = when (errorCode) {
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED,
-        PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT,
-        PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
-        PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS,
-        -> true
-        else -> false
-    }
+    private fun isOnline(): Boolean = connectivity?.isOnline() ?: true
 
     private fun PlaybackException.toMessage(): String = when (errorCode) {
         PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS -> {

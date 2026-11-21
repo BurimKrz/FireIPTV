@@ -237,19 +237,13 @@ class PlayerViewModel @Inject constructor(
 
     /** Fast-forward (⏩) steps the sleep timer through off, 30, 60 and 90 minutes. */
     fun cycleSleepTimer() {
-        val next = SLEEP_CHOICES_MIN[(SLEEP_CHOICES_MIN.indexOf(sleepChoice) + 1) % SLEEP_CHOICES_MIN.size]
+        val next = nextSleepChoice(sleepChoice)
         sleepChoice = next
         sleepJob?.cancel()
         extras.update { it.copy(sleepMinutesLeft = next) }
         if (next != null) {
             sleepJob = viewModelScope.launch {
-                val endsAt = SystemClock.elapsedRealtime() + TimeUnit.MINUTES.toMillis(next.toLong())
-                while (true) {
-                    val left = endsAt - SystemClock.elapsedRealtime()
-                    if (left <= 0) break
-                    extras.update { it.copy(sleepMinutesLeft = ((left + MINUTE_MS - 1) / MINUTE_MS).toInt()) }
-                    delay(minOf(left, SLEEP_TICK_MS))
-                }
+                sleepCountdown(next) { left -> extras.update { it.copy(sleepMinutesLeft = left) } }
                 sleepChoice = null
                 extras.update { it.copy(sleepMinutesLeft = null) }
                 stopToSaveData("The sleep timer ran out, so the stream stopped.")
@@ -268,10 +262,7 @@ class PlayerViewModel @Inject constructor(
             delay(STILL_WATCHING_AFTER_MS)
             // Stopped or failed: nothing downloads, so only ask once the channel plays again by itself.
             playerManager.status.first { it is PlaybackStatus.Playing }
-            for (left in STILL_WATCHING_ANSWER_S downTo 1) {
-                extras.update { it.copy(stillWatchingSeconds = left) }
-                delay(1_000)
-            }
+            stillWatchingCountdown { left -> extras.update { it.copy(stillWatchingSeconds = left) } }
             extras.update { it.copy(stillWatchingSeconds = null) }
             stopToSaveData("Nobody pressed a key for ${TimeUnit.MILLISECONDS.toHours(STILL_WATCHING_AFTER_MS)} hours, so the stream stopped to save data.")
         }
@@ -486,11 +477,6 @@ class PlayerViewModel @Inject constructor(
         const val ARG_LIST = "list"
         private const val ZAP_DEBOUNCE_MS = 250L
         private const val BANNER_MS = 4_000L
-        private const val STILL_WATCHING_AFTER_MS = 3 * 60 * 60 * 1_000L
-        private const val STILL_WATCHING_ANSWER_S = 60
-        private val SLEEP_CHOICES_MIN = listOf(null, 30, 60, 90)
-        private const val MINUTE_MS = 60_000L
-        private const val SLEEP_TICK_MS = 15_000L
         private const val RATE_SAMPLES = 6
 
         /** Refusals that can come from the account: login, expiry, or too many connections. */

@@ -46,6 +46,7 @@ class MovieRepository @Inject constructor(
     private val client = client.newBuilder().readTimeout(1, TimeUnit.MINUTES).build()
     private val dao = db.movieDao()
     private val playlistDao = db.playlistDao()
+    private val progressDao = db.watchProgressDao()
     private val lock = Mutex()
     private val infoCache = LruCache<String, MovieInfo>(INFO_CACHE_SIZE)
 
@@ -92,10 +93,15 @@ class MovieRepository @Inject constructor(
             dao.pageMovies(categoryId)
         }.flow
 
-    suspend fun movie(id: Long): MovieEntity? = dao.movie(id)
+    /**
+     * The movie with this provider id, from a downloaded category or, when a refresh has dropped
+     * the categories since, from Continue watching. Null when it is in neither.
+     */
+    suspend fun movie(playlistId: Long, streamId: String): Movie? =
+        dao.movieByStream(playlistId, streamId)?.toMovie() ?: progressDao.get(playlistId, streamId)?.toMovie()
 
     /** The movie's details; downloaded once per app run. */
-    suspend fun info(movie: MovieEntity): MovieInfo {
+    suspend fun info(movie: Movie): MovieInfo {
         val key = "${movie.playlistId}/${movie.streamId}"
         infoCache.get(key)?.let { return it }
         val (playlist, account) = account(movie.playlistId)
@@ -104,9 +110,9 @@ class MovieRepository @Inject constructor(
     }
 
     /** Where the movie's file is, for the player. */
-    suspend fun streamUrl(movie: MovieEntity): String {
-        val (_, account) = account(movie.playlistId)
-        return account.movieUrl(movie.streamId, movie.extension)
+    suspend fun file(movie: Movie): MovieFile {
+        val (playlist, account) = account(movie.playlistId)
+        return MovieFile(url = account.movieUrl(movie.streamId, movie.extension), userAgent = playlist.userAgent)
     }
 
     private suspend fun account(playlistId: Long): Pair<PlaylistEntity, XtreamAccount> {

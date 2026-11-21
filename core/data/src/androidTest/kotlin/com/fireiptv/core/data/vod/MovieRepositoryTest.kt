@@ -122,7 +122,7 @@ class MovieRepositoryTest {
         movies.loadCategories(playlistId)
         val thriller = movies.categories(playlistId).first().first()
         movies.loadMovies(thriller.id)
-        val madden = moviesIn(thriller.id).first()
+        val madden = checkNotNull(movies.movie(playlistId, moviesIn(thriller.id).first().streamId))
 
         val details = movies.info(madden)
         movies.info(madden)
@@ -132,7 +132,7 @@ class MovieRepositoryTest {
         assertEquals(7.4f, details.rating)
         assertEquals("1080p · H.264 · AAC 5.1", details.format)
         assertEquals("http://img.example/big.jpg", details.posterUrl)
-        assertEquals(server.url("/movie/user/pass/22.mp4").toString(), movies.streamUrl(madden))
+        assertEquals(server.url("/movie/user/pass/22.mp4").toString(), movies.file(madden).url)
     }
 
     @Test
@@ -144,6 +144,30 @@ class MovieRepositoryTest {
         PlaylistImporter(db, OkHttpClient()).import(playlistId)
         assertEquals(emptyList<Any>(), movies.categories(playlistId).first())
         assertNull(db.movieDao().movie(1))
+    }
+
+    @Test
+    fun aStoppedMovieResumesAfterARefreshAndLeavesOnceWatched() = runTest {
+        val playlistId = addPlaylist()
+        val progress = WatchProgressRepository(db)
+        movies.loadCategories(playlistId)
+        movies.loadMovies(movies.categories(playlistId).first().first().id)
+        val madden = checkNotNull(movies.movie(playlistId, "22"))
+        val oldOne = checkNotNull(movies.movie(playlistId, "11"))
+
+        progress.save(madden, positionMs = 2_590_000, durationMs = 6_300_000)
+        // A peek of a few seconds isn't something to resume.
+        progress.save(oldOne, positionMs = 5_000, durationMs = 6_000_000)
+        assertEquals(1, progress.continueWatchingCount(playlistId).first())
+
+        // The refresh deletes the movie rows; the movie still opens, from its saved progress.
+        PlaylistImporter(db, OkHttpClient()).import(playlistId)
+        assertEquals(madden, movies.movie(playlistId, "22"))
+        assertEquals(2_590_000L, progress.progress(madden).first()?.positionMs)
+
+        progress.save(madden, positionMs = 6_000_000, durationMs = 6_300_000)
+        assertEquals(true, progress.progress(madden).first()?.finished)
+        assertEquals(0, progress.continueWatchingCount(playlistId).first())
     }
 
     @Test

@@ -1,6 +1,5 @@
 package com.fireiptv.feature.browse.movies
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,26 +17,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.OutlinedButton
 import androidx.tv.material3.Text
+import com.fireiptv.core.data.vod.Movie
 import com.fireiptv.core.ui.ChannelLogo
+import com.fireiptv.core.ui.playbackTime
 
 /**
  * A movie's page: what the list already knew (name, year, poster, rating) shows at once; the
  * details (plot, cast, length, format) fill in after one small download.
  */
 @Composable
-fun MovieInfoScreen(viewModel: MovieInfoViewModel = hiltViewModel()) {
+fun MovieInfoScreen(onPlay: (movie: Movie, startMs: Long) -> Unit, viewModel: MovieInfoViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val movie = state.movie
     val info = state.info
-    val context = LocalContext.current
     val play = remember { FocusRequester() }
 
     // Overscan-safe margins for TV: 5% of 960×540 dp.
@@ -48,7 +48,10 @@ fun MovieInfoScreen(viewModel: MovieInfoViewModel = hiltViewModel()) {
             }
             return@Box
         }
-        LaunchedEffect(Unit) { play.requestFocus() }
+        // The first button changes from Play to Resume once a saved position is read (or after
+        // watching part of it), so focus goes to whichever is there.
+        val resumable = state.resumeFromMs != null
+        LaunchedEffect(state.progressRead, resumable) { if (state.progressRead) play.requestFocus() }
         Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             Box(
                 Modifier
@@ -80,14 +83,18 @@ fun MovieInfoScreen(viewModel: MovieInfoViewModel = hiltViewModel()) {
                 }
                 info?.director?.let { Detail("Director", it) }
                 info?.cast?.let { Detail("Cast", it) }
-                Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(top = 8.dp)) {
-                    Button(
-                        onClick = {
-                            // The movie player is step 3 of the beta plan.
-                            Toast.makeText(context, "Playing movies comes in the next beta", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.focusRequester(play),
-                    ) { Text("Play") }
+                if (state.progressRead) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.padding(top = 8.dp)) {
+                        val resumeFrom = state.resumeFromMs
+                        if (resumeFrom != null) {
+                            Button(onClick = { onPlay(movie, resumeFrom) }, modifier = Modifier.focusRequester(play)) {
+                                Text("Resume from ${playbackTime(resumeFrom)}")
+                            }
+                            OutlinedButton(onClick = { onPlay(movie, 0) }) { Text("Start over") }
+                        } else {
+                            Button(onClick = { onPlay(movie, 0) }, modifier = Modifier.focusRequester(play)) { Text("Play") }
+                        }
+                    }
                 }
             }
         }

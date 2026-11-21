@@ -36,6 +36,10 @@ interface MovieDao {
     @Query("SELECT * FROM movie WHERE id = :id")
     suspend fun movie(id: Long): MovieEntity?
 
+    /** The same movie can be in two categories; any of its rows will do. */
+    @Query("SELECT * FROM movie WHERE playlistId = :playlistId AND streamId = :streamId LIMIT 1")
+    suspend fun movieByStream(playlistId: Long, streamId: String): MovieEntity?
+
     /** A refresh drops the movie lists, so they download fresh when next opened. */
     @Query("DELETE FROM movie_category WHERE playlistId = :playlistId")
     suspend fun deleteAll(playlistId: Long)

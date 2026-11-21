@@ -16,6 +16,8 @@ dependencies {
     implementation(project(":core:player"))
 
     implementation(libs.media3.ui.compose)
+    // Only its SubtitleView: Compose has no subtitle renderer yet.
+    implementation(libs.media3.ui)
     implementation(libs.paging.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

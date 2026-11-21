@@ -81,7 +81,7 @@ fun BrowseScreen(
     onEditPlaylists: () -> Unit,
     /** [list] is the list the channel was picked from, for zapping. */
     onPlayChannel: (channelId: Long, list: ChannelList) -> Unit,
-    onOpenMovie: (movieId: Long) -> Unit,
+    onOpenMovie: (playlistId: Long, streamId: String) -> Unit,
     viewModel: BrowseViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
