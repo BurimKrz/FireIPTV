@@ -8,7 +8,7 @@ plugins {
 val appVersion = "1.0.2"
 
 /** FireIPTV Beta's version: push the tag v<betaVersion> and CI publishes it as a GitHub pre-release. */
-val betaVersion = "1.1.0-beta.1"
+val betaVersion = "1.1.0-beta.2"
 
 /** 1.0.2 → 10002. A beta adds two digits for its number: 1.1.0-beta.3 → 1010003. */
 fun versionCodeOf(version: String): Int {
