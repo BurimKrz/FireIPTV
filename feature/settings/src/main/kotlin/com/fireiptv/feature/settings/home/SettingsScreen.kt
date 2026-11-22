@@ -125,6 +125,17 @@ fun SettingsScreen(
             onClick = { open(ROW_START, viewModel::toggleStartMode) },
             modifier = rowModifier.focusRequester(rows[ROW_START]),
         )
+        SettingRow(
+            title = "Channel player: " + if (state.externalPlayer) "Other app" else "FireIPTV",
+            detail = if (state.externalPlayer) {
+                "Channels open in another installed player such as VLC, without zapping or the side list. " +
+                    "OK to play them here again."
+            } else {
+                "Channels play here. OK to open them in another installed player such as VLC, to compare the picture."
+            },
+            onClick = { open(ROW_PLAYER, viewModel::toggleExternalPlayer) },
+            modifier = rowModifier.focusRequester(rows[ROW_PLAYER]),
+        )
         // FireIPTV Beta has movie posters too, under the same switch and cache.
         val images = if (AppEdition.of(LocalContext.current) == AppEdition.Beta) "logos and posters" else "logos"
         SettingRow(
@@ -240,10 +251,11 @@ private const val ROW_ACCOUNT = 1
 private const val ROW_GROUPS = 2
 private const val ROW_HIDDEN = 3
 private const val ROW_START = 4
-private const val ROW_LOGOS = 5
-private const val ROW_DATA = 6
-private const val ROW_BACKUP = 7
-private const val ROW_RESTORE = 8
-private const val ROW_UPDATES = 9
-private const val ROW_LOG = 10
-private const val ROW_COUNT = 11
+private const val ROW_PLAYER = 5
+private const val ROW_LOGOS = 6
+private const val ROW_DATA = 7
+private const val ROW_BACKUP = 8
+private const val ROW_RESTORE = 9
+private const val ROW_UPDATES = 10
+private const val ROW_LOG = 11
+private const val ROW_COUNT = 12

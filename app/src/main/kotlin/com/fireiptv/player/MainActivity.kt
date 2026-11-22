@@ -1,7 +1,10 @@
 package com.fireiptv.player
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -11,6 +14,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
+import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -22,11 +26,13 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.tv.material3.Surface
 import com.fireiptv.core.data.channel.ChannelList
+import com.fireiptv.core.data.channel.ChannelRepository
 import com.fireiptv.core.data.playlist.PlaylistRepository
 import com.fireiptv.core.data.settings.SettingsRepository
 import com.fireiptv.core.data.update.UpdateRepository
 import com.fireiptv.core.data.usage.DataUsageRepository
 import com.fireiptv.core.data.vod.Movie
+import com.fireiptv.core.log.AppLog
 import com.fireiptv.core.ui.FireTheme
 import com.fireiptv.core.ui.LocalLogosEnabled
 import com.fireiptv.feature.browse.BrowseScreen
@@ -55,6 +61,8 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
 
     @Inject lateinit var playlistRepository: PlaylistRepository
+    @Inject lateinit var channelRepository: ChannelRepository
+    @Inject lateinit var appLog: AppLog
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var updateRepository: UpdateRepository
     @Inject lateinit var dataUsage: DataUsageRepository
@@ -80,11 +88,29 @@ class MainActivity : ComponentActivity() {
         setContent {
             FireTheme {
                 val logosEnabled by settingsRepository.logosEnabled.collectAsStateWithLifecycle()
+                val externalPlayer by settingsRepository.externalPlayer.collectAsStateWithLifecycle()
                 CompositionLocalProvider(LocalLogosEnabled provides logosEnabled) {
                     Surface(modifier = Modifier.fillMaxSize()) {
-                        AppNavigation(playlistRepository, prefillUrl)
+                        AppNavigation(playlistRepository, prefillUrl, externalPlayer, ::playInOtherApp)
                     }
                 }
+            }
+        }
+    }
+
+    /** Settings → Channel player: Other app. Hands the stream to another installed player, e.g. VLC. */
+    private fun playInOtherApp(channelId: Long) {
+        lifecycleScope.launch {
+            val channel = checkNotNull(channelRepository.channel(channelId)) { "Channel $channelId is not in the database" }
+            val intent = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(channel.streamUrl.toUri(), "video/*")
+                .putExtra(EXTRA_TITLE, channel.name)
+            try {
+                startActivity(intent)
+            } catch (e: ActivityNotFoundException) {
+                appLog.error("No other video player is installed to open ${channel.name}")
+                val message = "No other video player installed. Install VLC, or set Channel player back to FireIPTV."
+                Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -102,6 +128,9 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_PLAYLIST_URL = "playlist_url"
+
+        // VLC shows this as the stream's name instead of the URL.
+        private const val EXTRA_TITLE = "title"
         private const val DATA_SAMPLE_MS = 60_000L
     }
 }
@@ -132,7 +161,12 @@ private object Routes {
 }
 
 @Composable
-private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
+private fun AppNavigation(
+    repository: PlaylistRepository,
+    prefillUrl: String?,
+    externalPlayer: Boolean,
+    playInOtherApp: (channelId: Long) -> Unit,
+) {
     val hasPlaylists by produceState<Boolean?>(initialValue = null) { value = repository.hasPlaylists() }
     val start = when (hasPlaylists) {
         null -> return // first frame only, while the database answers
@@ -141,6 +175,9 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
     }
 
     val navController = rememberNavController()
+    val playChannel = { channelId: Long, list: ChannelList ->
+        if (externalPlayer) playInOtherApp(channelId) else navController.navigate(Routes.player(channelId, list))
+    }
     NavHost(navController, startDestination = start) {
         composable(Routes.BROWSE) {
             BrowseScreen(
@@ -148,7 +185,7 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
                 onOpenSearch = { navController.navigate(Routes.SEARCH) },
                 onAddPlaylist = { navController.navigate(Routes.ADD_PLAYLIST) },
                 onEditPlaylists = { navController.navigate(Routes.PLAYLISTS) },
-                onPlayChannel = { channelId, list -> navController.navigate(Routes.player(channelId, list)) },
+                onPlayChannel = playChannel,
                 onOpenMovie = { playlistId, streamId -> navController.navigate(Routes.movie(playlistId, streamId)) },
             )
         }
@@ -184,7 +221,7 @@ private fun AppNavigation(repository: PlaylistRepository, prefillUrl: String?) {
             PlayerScreen()
         }
         composable(Routes.SEARCH) {
-            SearchScreen(onPlayChannel = { channelId, list -> navController.navigate(Routes.player(channelId, list)) })
+            SearchScreen(onPlayChannel = playChannel)
         }
         composable(Routes.SETTINGS) {
             SettingsScreen(

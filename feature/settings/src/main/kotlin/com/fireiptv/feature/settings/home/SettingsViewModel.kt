@@ -41,6 +41,7 @@ data class SettingsUiState(
     val hiddenGroupCount: Int = 0,
     val startMode: StartMode = StartMode.FAST,
     val logosEnabled: Boolean = true,
+    val externalPlayer: Boolean = false,
     /** The playlist is an Xtream login, so there are account details to show. */
     val hasAccount: Boolean = false,
     val hiddenChannelCount: Int = 0,
@@ -91,8 +92,9 @@ class SettingsViewModel @Inject constructor(
             combine(playlistRepository.playlists, groups, hiddenChannels, ::Triple),
             settings.startMode,
             settings.logosEnabled,
+            settings.externalPlayer,
             accountRepository.available,
-        ) { (playlists, groups, hidden), startMode, logos, hasAccount ->
+        ) { (playlists, groups, hidden), startMode, logos, externalPlayer, hasAccount ->
             SettingsUiState(
                 hiddenChannelCount = hidden.size,
                 playlistCount = playlists.size,
@@ -101,6 +103,7 @@ class SettingsViewModel @Inject constructor(
                 hiddenGroupCount = groups.count { it.hidden },
                 startMode = startMode,
                 logosEnabled = logos,
+                externalPlayer = externalPlayer,
                 hasAccount = hasAccount,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
@@ -112,6 +115,10 @@ class SettingsViewModel @Inject constructor(
 
     fun toggleLogos() {
         viewModelScope.launch { settings.setLogosEnabled(!settings.logosEnabled.value) }
+    }
+
+    fun toggleExternalPlayer() {
+        viewModelScope.launch { settings.setExternalPlayer(!settings.externalPlayer.value) }
     }
 
     /** OK on the Updates row: checks, downloads, or returns the installer to start. */
