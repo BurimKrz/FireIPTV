@@ -164,20 +164,14 @@ private fun ResultItem(
     logosMayDownload: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // The group line sits under the name, past the number and (when shown) the logo.
-    val groupIndent = if (LocalLogosEnabled.current && !result.logoUrl.isNullOrBlank()) 136.dp else 72.dp
+    // The group line sits under the name, past the logo when one is shown.
+    val groupIndent = if (LocalLogosEnabled.current && !result.logoUrl.isNullOrBlank()) 64.dp else 0.dp
     DenseListItem(
         selected = false,
         onClick = onClick,
         onLongClick = onOptions,
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    result.number.toString(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    modifier = Modifier.width(72.dp),
-                )
                 ChannelLogo(
                     result.logoUrl,
                     Modifier.padding(end = 16.dp).size(width = 48.dp, height = 27.dp),
