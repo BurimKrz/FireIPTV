@@ -28,6 +28,7 @@ import androidx.tv.material3.Surface
 import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.channel.ChannelRepository
 import com.fireiptv.core.data.playlist.PlaylistRepository
+import com.fireiptv.core.data.settings.ChannelPlayer
 import com.fireiptv.core.data.settings.SettingsRepository
 import com.fireiptv.core.data.update.UpdateRepository
 import com.fireiptv.core.data.usage.DataUsageRepository
@@ -43,6 +44,8 @@ import com.fireiptv.feature.player.PlayerScreen
 import com.fireiptv.feature.player.PlayerViewModel
 import com.fireiptv.feature.player.movie.MoviePlayerScreen
 import com.fireiptv.feature.player.movie.MoviePlayerViewModel
+import com.fireiptv.feature.player.vlc.VlcPlayerScreen
+import com.fireiptv.feature.player.vlc.VlcPlayerViewModel
 import com.fireiptv.feature.settings.account.AccountScreen
 import com.fireiptv.feature.settings.groups.GroupsScreen
 import com.fireiptv.feature.settings.hidden.HiddenChannelsScreen
@@ -88,10 +91,10 @@ class MainActivity : ComponentActivity() {
         setContent {
             FireTheme {
                 val logosEnabled by settingsRepository.logosEnabled.collectAsStateWithLifecycle()
-                val externalPlayer by settingsRepository.externalPlayer.collectAsStateWithLifecycle()
+                val channelPlayer by settingsRepository.channelPlayer.collectAsStateWithLifecycle()
                 CompositionLocalProvider(LocalLogosEnabled provides logosEnabled) {
                     Surface(modifier = Modifier.fillMaxSize()) {
-                        AppNavigation(playlistRepository, prefillUrl, externalPlayer, ::playInOtherApp)
+                        AppNavigation(playlistRepository, prefillUrl, channelPlayer, ::playInOtherApp)
                     }
                 }
             }
@@ -158,13 +161,17 @@ private object Routes {
     fun moviePlayer(movie: Movie, startMs: Long) = "moviePlayer/${movie.playlistId}/${Uri.encode(movie.streamId)}?startMs=$startMs"
 
     fun player(channelId: Long, list: ChannelList) = "player/$channelId?list=${list.encode()}"
+
+    const val VLC_PLAYER = "vlcPlayer/{${VlcPlayerViewModel.ARG_CHANNEL_ID}}"
+
+    fun vlcPlayer(channelId: Long) = "vlcPlayer/$channelId"
 }
 
 @Composable
 private fun AppNavigation(
     repository: PlaylistRepository,
     prefillUrl: String?,
-    externalPlayer: Boolean,
+    channelPlayer: ChannelPlayer,
     playInOtherApp: (channelId: Long) -> Unit,
 ) {
     val hasPlaylists by produceState<Boolean?>(initialValue = null) { value = repository.hasPlaylists() }
@@ -176,7 +183,11 @@ private fun AppNavigation(
 
     val navController = rememberNavController()
     val playChannel = { channelId: Long, list: ChannelList ->
-        if (externalPlayer) playInOtherApp(channelId) else navController.navigate(Routes.player(channelId, list))
+        when (channelPlayer) {
+            ChannelPlayer.FIREIPTV -> navController.navigate(Routes.player(channelId, list))
+            ChannelPlayer.VLC -> navController.navigate(Routes.vlcPlayer(channelId))
+            ChannelPlayer.OTHER_APP -> playInOtherApp(channelId)
+        }
     }
     NavHost(navController, startDestination = start) {
         composable(Routes.BROWSE) {
@@ -219,6 +230,12 @@ private fun AppNavigation(
             ),
         ) {
             PlayerScreen()
+        }
+        composable(
+            Routes.VLC_PLAYER,
+            arguments = listOf(navArgument(VlcPlayerViewModel.ARG_CHANNEL_ID) { type = NavType.LongType }),
+        ) {
+            VlcPlayerScreen()
         }
         composable(Routes.SEARCH) {
             SearchScreen(onPlayChannel = playChannel)

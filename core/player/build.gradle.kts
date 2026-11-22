@@ -16,6 +16,8 @@ dependencies {
     api(libs.media3.exoplayer)
     implementation(project(":core:ffmpeg"))
     implementation(project(":core:log"))
+    // The beta's second engine (Settings → Channel player: VLC); about 35 MB of native code per APK.
+    api(libs.libvlc)
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.datasource.okhttp)
     implementation(libs.androidx.core.ktx)

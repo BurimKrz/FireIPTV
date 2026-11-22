@@ -323,7 +323,7 @@ private fun Subtitles(player: Player, modifier: Modifier) {
 }
 
 @Composable
-private fun Message(title: String, body: String, modifier: Modifier = Modifier) {
+internal fun Message(title: String, body: String, modifier: Modifier = Modifier) {
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = modifier

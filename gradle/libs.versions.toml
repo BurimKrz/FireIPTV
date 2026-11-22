@@ -10,6 +10,7 @@ lifecycle = "2.11.0"
 navigation = "2.10.2"
 coreKtx = "1.19.1"
 media3 = "1.11.1"
+libvlc = "3.7.7"
 okhttp = "5.5.1"
 okio = "3.18.2"
 room = "2.8.5"
@@ -54,6 +55,7 @@ media3-ui-compose = { module = "androidx.media3:media3-ui-compose", version.ref 
 media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
 media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
 media3-decoder = { module = "androidx.media3:media3-decoder", version.ref = "media3" }
+libvlc = { module = "org.videolan.android:libvlc-all", version.ref = "libvlc" }
 androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "androidxAnnotation" }
 checker-qual = { module = "org.checkerframework:checker-qual", version.ref = "checkerQual" }
 

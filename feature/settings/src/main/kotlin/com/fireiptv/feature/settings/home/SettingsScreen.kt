@@ -30,6 +30,7 @@ import androidx.tv.material3.ListItem
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.fireiptv.core.data.AppEdition
+import com.fireiptv.core.data.settings.ChannelPlayer
 import com.fireiptv.core.data.settings.StartMode
 import com.fireiptv.core.data.update.UpdateState
 import com.fireiptv.feature.settings.log.summary
@@ -126,14 +127,22 @@ fun SettingsScreen(
             modifier = rowModifier.focusRequester(rows[ROW_START]),
         )
         SettingRow(
-            title = "Channel player: " + if (state.externalPlayer) "Other app" else "FireIPTV",
-            detail = if (state.externalPlayer) {
-                "Channels open in another installed player such as VLC, without zapping or the side list. " +
-                    "OK to play them here again."
-            } else {
-                "Channels play here. OK to open them in another installed player such as VLC, to compare the picture."
+            title = "Channel player: " + when (state.channelPlayer) {
+                ChannelPlayer.FIREIPTV -> "FireIPTV"
+                ChannelPlayer.VLC -> "VLC (built in)"
+                ChannelPlayer.OTHER_APP -> "Other app"
             },
-            onClick = { open(ROW_PLAYER, viewModel::toggleExternalPlayer) },
+            detail = when (state.channelPlayer) {
+                ChannelPlayer.FIREIPTV ->
+                    "Channels play here. OK to play them in the built-in VLC instead, to compare the picture."
+                ChannelPlayer.VLC ->
+                    "Channels play in the built-in VLC, which smooths interlaced TV (Yadif 2x), without zapping " +
+                        "or the side list. OK to open them in another installed player."
+                ChannelPlayer.OTHER_APP ->
+                    "Channels open in another installed player such as VLC, without zapping or the side list. " +
+                        "OK to play them here again."
+            },
+            onClick = { open(ROW_PLAYER, viewModel::nextChannelPlayer) },
             modifier = rowModifier.focusRequester(rows[ROW_PLAYER]),
         )
         // FireIPTV Beta has movie posters too, under the same switch and cache.

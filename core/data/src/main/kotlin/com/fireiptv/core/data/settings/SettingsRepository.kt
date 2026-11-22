@@ -26,6 +26,9 @@ import javax.inject.Singleton
 /** How a channel starts: as soon as possible, or after a longer buffer that rides out weak Wi-Fi. */
 enum class StartMode { FAST, STABLE }
 
+/** What plays a channel: our ExoPlayer, the built-in VLC (libVLC), or another installed player app. */
+enum class ChannelPlayer { FIREIPTV, VLC, OTHER_APP }
+
 /** Subtitles chosen in a movie, applied to the next ones. */
 sealed interface SubtitleChoice {
     /** Never chosen: only subtitles the file marks as default or forced show. */
@@ -58,10 +61,10 @@ class SettingsRepository @Inject constructor(
         .map { it[LOGOS_ENABLED] ?: true }
         .stateIn(scope, SharingStarted.Eagerly, true)
 
-    /** Channels open in another installed player (e.g. VLC) instead of ours, to compare the picture. */
-    val externalPlayer: StateFlow<Boolean> = prefs
-        .map { it[EXTERNAL_PLAYER] ?: false }
-        .stateIn(scope, SharingStarted.Eagerly, false)
+    /** Set in the beta to compare the picture of the same channel in different players. */
+    val channelPlayer: StateFlow<ChannelPlayer> = prefs
+        .map { prefs -> prefs[CHANNEL_PLAYER]?.let { name -> ChannelPlayer.entries.firstOrNull { it.name == name } } ?: ChannelPlayer.FIREIPTV }
+        .stateIn(scope, SharingStarted.Eagerly, ChannelPlayer.FIREIPTV)
 
     /**
      * The playlist home shows, or null for the first one. A plain flow, not a state with a default,
@@ -108,14 +111,14 @@ class SettingsRepository @Inject constructor(
         store.edit { it[LOGOS_ENABLED] = enabled }
     }
 
-    suspend fun setExternalPlayer(enabled: Boolean) {
-        store.edit { it[EXTERNAL_PLAYER] = enabled }
+    suspend fun setChannelPlayer(player: ChannelPlayer) {
+        store.edit { it[CHANNEL_PLAYER] = player.name }
     }
 
     private companion object {
         val START_MODE = stringPreferencesKey("start_mode")
         val LOGOS_ENABLED = booleanPreferencesKey("logos_enabled")
-        val EXTERNAL_PLAYER = booleanPreferencesKey("external_player")
+        val CHANNEL_PLAYER = stringPreferencesKey("channel_player")
         val ACTIVE_PLAYLIST = longPreferencesKey("active_playlist")
         val AUDIO_LANGUAGE = stringPreferencesKey("audio_language")
         val SUBTITLES = stringPreferencesKey("subtitles")

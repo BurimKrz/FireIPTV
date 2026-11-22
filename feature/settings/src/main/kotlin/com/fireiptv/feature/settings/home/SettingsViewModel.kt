@@ -10,6 +10,7 @@ import com.fireiptv.core.data.backup.BackupSummary
 import com.fireiptv.core.data.channel.ChannelRepository
 import com.fireiptv.core.data.di.ApplicationScope
 import com.fireiptv.core.data.playlist.PlaylistRepository
+import com.fireiptv.core.data.settings.ChannelPlayer
 import com.fireiptv.core.data.settings.SettingsRepository
 import com.fireiptv.core.data.settings.StartMode
 import com.fireiptv.core.data.update.UpdateRepository
@@ -41,7 +42,7 @@ data class SettingsUiState(
     val hiddenGroupCount: Int = 0,
     val startMode: StartMode = StartMode.FAST,
     val logosEnabled: Boolean = true,
-    val externalPlayer: Boolean = false,
+    val channelPlayer: ChannelPlayer = ChannelPlayer.FIREIPTV,
     /** The playlist is an Xtream login, so there are account details to show. */
     val hasAccount: Boolean = false,
     val hiddenChannelCount: Int = 0,
@@ -92,9 +93,9 @@ class SettingsViewModel @Inject constructor(
             combine(playlistRepository.playlists, groups, hiddenChannels, ::Triple),
             settings.startMode,
             settings.logosEnabled,
-            settings.externalPlayer,
+            settings.channelPlayer,
             accountRepository.available,
-        ) { (playlists, groups, hidden), startMode, logos, externalPlayer, hasAccount ->
+        ) { (playlists, groups, hidden), startMode, logos, channelPlayer, hasAccount ->
             SettingsUiState(
                 hiddenChannelCount = hidden.size,
                 playlistCount = playlists.size,
@@ -103,7 +104,7 @@ class SettingsViewModel @Inject constructor(
                 hiddenGroupCount = groups.count { it.hidden },
                 startMode = startMode,
                 logosEnabled = logos,
-                externalPlayer = externalPlayer,
+                channelPlayer = channelPlayer,
                 hasAccount = hasAccount,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
@@ -117,8 +118,11 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settings.setLogosEnabled(!settings.logosEnabled.value) }
     }
 
-    fun toggleExternalPlayer() {
-        viewModelScope.launch { settings.setExternalPlayer(!settings.externalPlayer.value) }
+    /** OK on Channel player: FireIPTV → VLC → Other app → FireIPTV. */
+    fun nextChannelPlayer() {
+        val players = ChannelPlayer.entries
+        val next = players[(settings.channelPlayer.value.ordinal + 1) % players.size]
+        viewModelScope.launch { settings.setChannelPlayer(next) }
     }
 
     /** OK on the Updates row: checks, downloads, or returns the installer to start. */
