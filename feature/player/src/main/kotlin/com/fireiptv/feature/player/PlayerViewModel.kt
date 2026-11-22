@@ -43,7 +43,6 @@ import javax.inject.Inject
 /** The channel in the banner: the one playing, or the one a zap is heading to. */
 @Immutable
 data class BannerChannel(
-    val number: Int,
     val name: String,
     val listTitle: String,
     val logoUrl: String?,
@@ -52,14 +51,14 @@ data class BannerChannel(
 
 /** A row of the channel list that Left/Right opens over the picture. */
 @Immutable
-data class PanelChannel(val id: Long, val number: Int, val name: String, val logoUrl: String?, val favorite: Boolean)
+data class PanelChannel(val id: Long, val name: String, val logoUrl: String?, val favorite: Boolean)
 
 /** Another version of a failed channel (HD, SD, backup), offered on the error message. */
 @Immutable
 data class OtherVersion(val id: Long, val name: String)
 
-/** The side list is open; it starts on the row at [startIndex], the channel in the banner. */
-data class PanelState(val title: String, val currentId: Long, val startIndex: Int)
+/** The side list ([list]) is open; it starts on the row at [startIndex], the channel in the banner. */
+data class PanelState(val title: String, val list: ChannelList, val currentId: Long, val startIndex: Int)
 
 data class PlayerUiState(
     val channel: BannerChannel? = null,
@@ -130,7 +129,7 @@ class PlayerViewModel @Inject constructor(
                 flowOf(PagingData.empty())
             } else {
                 channels.channels(source.first, source.second).map { page ->
-                    page.map { PanelChannel(it.id, it.number ?: (it.sortOrder + 1), it.name, it.logoUrl, it.favorite) }
+                    page.map { PanelChannel(it.id, it.name, it.logoUrl, it.favorite) }
                 }
             }
         }
@@ -346,7 +345,7 @@ class PlayerViewModel @Inject constructor(
         val current = target ?: return
         viewModelScope.launch {
             val index = channels.position(current, zapList) ?: 0
-            panel.value = PanelState(listTitle, current.id, index)
+            panel.value = PanelState(listTitle, zapList, current.id, index)
             hideBannerJob?.cancel()
             bannerVisible.value = false
         }
@@ -411,7 +410,6 @@ class PlayerViewModel @Inject constructor(
         target = channel
         bannerTarget.value = channel
         banner.value = BannerChannel(
-            number = channel.number ?: (channel.sortOrder + 1),
             name = channel.name,
             listTitle = listTitle,
             logoUrl = channel.logoUrl,

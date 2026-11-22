@@ -571,12 +571,6 @@ private fun ChannelItem(
         onLongClick = onOptions,
         headlineContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    channel.number.toString(),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    modifier = Modifier.width(72.dp),
-                )
                 ChannelLogo(
                     channel.logoUrl,
                     Modifier.padding(end = 16.dp).size(width = 48.dp, height = 27.dp),

@@ -25,7 +25,6 @@ import javax.inject.Inject
 @Immutable
 data class SearchResult(
     val id: Long,
-    val number: Int,
     val name: String,
     val logoUrl: String?,
     val groupTitle: String?,
@@ -64,7 +63,6 @@ class SearchViewModel @Inject constructor(
                     text to items.map {
                         SearchResult(
                             id = it.id,
-                            number = it.number ?: (it.sortOrder + 1),
                             name = it.name,
                             logoUrl = it.logoUrl,
                             groupTitle = it.groupTitle,

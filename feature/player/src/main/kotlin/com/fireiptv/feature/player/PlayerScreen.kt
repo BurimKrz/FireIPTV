@@ -25,6 +25,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
@@ -62,7 +64,8 @@ import com.fireiptv.core.ui.ChannelLogo
 
 /**
  * Full-screen live TV. Up/Down zap through the list the channel was opened from (CH+/CH- too),
- * Left/Right open that list at the side, OK shows the banner (or retries a failed channel; when
+ * Left/Right open that list at the side (holding OK on one of its rows opens that channel's
+ * favourite, categories and Hide), OK shows the banner (or retries a failed channel; when
  * the failed channel has other versions, Up/Down pick one of them or Try again instead),
  * Menu (☰) adds or removes a favourite, Play/Pause stops and restarts the stream, Fast-forward (⏩)
  * sets the sleep timer, Back returns to the list.
@@ -196,6 +199,7 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
                 panel = panel,
                 channels = viewModel.panelChannels.collectAsLazyPagingItems(),
                 onPlay = viewModel::playFromPanel,
+                onClose = viewModel::closePanel,
                 modifier = Modifier.align(Alignment.CenterStart),
             )
         }
@@ -220,7 +224,6 @@ private fun Banner(channel: BannerChannel, extras: PlayerExtras, lastZapMs: Long
             .padding(horizontal = 48.dp, vertical = 27.dp),
     ) {
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-            Text(channel.number.toString(), style = MaterialTheme.typography.displaySmall, color = Color.White)
             ChannelLogo(channel.logoUrl, Modifier.size(width = 96.dp, height = 54.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -260,20 +263,38 @@ private fun ChannelPanel(
     panel: PanelState,
     channels: LazyPagingItems<PanelChannel>,
     onPlay: (Long) -> Unit,
+    onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val listState = remember(panel) { LazyListState(firstVisibleItemIndex = (panel.startIndex - 3).coerceAtLeast(0)) }
-    val current = remember { FocusRequester() }
-    LaunchedEffect(panel) {
+    // The row to focus: the playing channel at first, then the neighbour of a row that left the list.
+    var focusId by remember(panel) { mutableLongStateOf(panel.currentId) }
+    val focusRow = remember { FocusRequester() }
+    var menuFor by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(panel, focusId) {
         // Its page may still be loading: wait until the row is laid out, then focus it.
         repeat(PANEL_FOCUS_FRAMES) {
-            if (listState.layoutInfo.visibleItemsInfo.any { it.key == panel.currentId }) {
+            if (listState.layoutInfo.visibleItemsInfo.any { it.key == focusId }) {
                 withFrameNanos {}
-                current.requestFocus()
+                focusRow.requestFocus()
                 return@LaunchedEffect
             }
             withFrameNanos {}
         }
+    }
+    menuFor?.let { id ->
+        ChannelMenuDialog(
+            channelId = id,
+            panelList = panel.list,
+            // Focus the row that takes its place; with none left, close the panel so focus returns to the picture.
+            onLeavingList = {
+                val rows = channels.itemSnapshotList
+                val index = rows.indexOfFirst { it?.id == id }
+                val next = rows.getOrNull(index + 1) ?: rows.getOrNull(index - 1)
+                if (next == null) onClose() else focusId = next.id
+            },
+            onDismiss = { menuFor = null },
+        )
     }
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -300,9 +321,9 @@ private fun ChannelPanel(
                     DenseListItem(
                         selected = channel.id == panel.currentId,
                         onClick = { onPlay(channel.id) },
+                        onLongClick = { menuFor = channel.id },
                         headlineContent = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(channel.number.toString(), maxLines = 1, modifier = Modifier.width(64.dp))
                                 ChannelLogo(channel.logoUrl, Modifier.padding(end = 12.dp).size(width = 48.dp, height = 27.dp))
                                 Text(
                                     if (channel.favorite) "★ ${channel.name}" else channel.name,
@@ -311,7 +332,7 @@ private fun ChannelPanel(
                                 )
                             }
                         },
-                        modifier = if (channel.id == panel.currentId) Modifier.focusRequester(current) else Modifier,
+                        modifier = if (channel.id == focusId) Modifier.focusRequester(focusRow) else Modifier,
                     )
                 }
             }

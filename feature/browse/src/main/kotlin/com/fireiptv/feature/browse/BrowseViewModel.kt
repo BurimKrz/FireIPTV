@@ -50,7 +50,7 @@ data class GroupRow(
 }
 
 @Immutable
-data class ChannelRow(val id: Long, val number: Int, val name: String, val logoUrl: String?, val favorite: Boolean)
+data class ChannelRow(val id: Long, val name: String, val logoUrl: String?, val favorite: Boolean)
 
 /** What home shows under the header. */
 enum class Section { Live, Movies }
@@ -216,8 +216,5 @@ class BrowseViewModel @Inject constructor(
         viewModelScope.launch { channelRepository.deleteList(listId) }
     }
 
-    // Channels without a tvg-chno are numbered by their place in the playlist, which stays the
-    // same in every group.
-    private fun ChannelListItem.toRow() =
-        ChannelRow(id = id, number = number ?: (sortOrder + 1), name = name, logoUrl = logoUrl, favorite = favorite)
+    private fun ChannelListItem.toRow() = ChannelRow(id = id, name = name, logoUrl = logoUrl, favorite = favorite)
 }
