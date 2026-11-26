@@ -5,6 +5,7 @@ import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
@@ -41,6 +42,18 @@ abstract class PlayerDatabase : RoomDatabase() {
     abstract fun userListDao(): UserListDao
 
     companion object {
+        /**
+         * FireIPTV Beta up to 1.1.0-beta.4 had movies: v8 and v9 only added these three tables to v7.
+         * Dropping them takes such a database back to v7 with its playlists, favourites and lists.
+         */
+        private val MOVIES_REMOVED = object : Migration(9, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `watch_progress`")
+                db.execSQL("DROP TABLE IF EXISTS `movie`")
+                db.execSQL("DROP TABLE IF EXISTS `movie_category`")
+            }
+        }
+
         fun build(context: Context, inMemory: Boolean = false): PlayerDatabase {
             val builder = if (inMemory) {
                 Room.inMemoryDatabaseBuilder(context, PlayerDatabase::class.java)
@@ -50,6 +63,7 @@ abstract class PlayerDatabase : RoomDatabase() {
             return builder
                 // Room's default turns WAL off on devices that report low RAM; readers and the importer need it.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
+                .addMigrations(MOVIES_REMOVED)
                 .addCallback(
                     object : Callback() {
                         override fun onOpen(db: SupportSQLiteDatabase) {
