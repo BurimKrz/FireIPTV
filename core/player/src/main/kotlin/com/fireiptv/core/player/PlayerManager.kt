@@ -129,6 +129,13 @@ class PlayerManager @Inject constructor(
     private val _lastZapMs = MutableStateFlow<Long?>(null)
     val lastZapMs: StateFlow<Long?> = _lastZapMs.asStateFlow()
 
+    /**
+     * Video frames per second of the current channel, measured once it plays (ExoPlayer leaves the
+     * format's frame rate unset for TS streams). Null until measured, and for channels without video.
+     */
+    private val _frameRate = MutableStateFlow<Float?>(null)
+    val frameRate: StateFlow<Float?> = _frameRate.asStateFlow()
+
     private var current: StreamRequest? = null
     private var asHls = false
     private var retries = 0
@@ -137,6 +144,7 @@ class PlayerManager @Inject constructor(
     private var stallJob: Job? = null
     private var freezeJob: Job? = null
     private var steadyJob: Job? = null
+    private var frameRateJob: Job? = null
     private var zapStartedAt = 0L
 
     private val extractors = DefaultExtractorsFactory().setTsExtractorFlags(
@@ -153,6 +161,7 @@ class PlayerManager @Inject constructor(
                         Player.STATE_BUFFERING -> {
                             steadyJob?.cancel()
                             freezeJob?.cancel()
+                            frameRateJob?.cancel()
                             if (_status.value !is PlaybackStatus.Failed) _status.value = PlaybackStatus.Loading
                             // A stall after playback started gets the same watchdog as the first start.
                             if (stallJob?.isActive != true) watchStall()
@@ -168,17 +177,22 @@ class PlayerManager @Inject constructor(
                                 retries = 0
                             }
                             watchFreeze()
+                            measureFrameRate()
                         }
                         // A live channel has no end: the provider closed the stream, so open it again.
                         Player.STATE_ENDED -> {
                             freezeJob?.cancel()
+                            frameRateJob?.cancel()
                             steadyJob?.cancel()
                             val status = _status.value
                             if (status == PlaybackStatus.Playing || status == PlaybackStatus.Loading) {
                                 reopenOrFail("the provider closed the stream", "The provider stopped sending this channel.")
                             }
                         }
-                        else -> freezeJob?.cancel()
+                        else -> {
+                            freezeJob?.cancel()
+                            frameRateJob?.cancel()
+                        }
                     }
                 }
 
@@ -200,6 +214,7 @@ class PlayerManager @Inject constructor(
 
     fun play(stream: StreamRequest) {
         current = stream
+        _frameRate.value = null
         retries = 0
         stuckReopened = false
         asHls = isHls(stream.url)
@@ -222,6 +237,7 @@ class PlayerManager @Inject constructor(
         stallJob?.cancel()
         steadyJob?.cancel()
         freezeJob?.cancel()
+        frameRateJob?.cancel()
         player.stop()
         _status.value = PlaybackStatus.Idle
     }
@@ -319,6 +335,34 @@ class PlayerManager @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Counts the frames the decoder hands out (shown, dropped or skipped) over [FRAME_RATE_WINDOW_MS]
+     * of media time, after the first second of a start or a stall, which can run fast or slow.
+     */
+    private fun measureFrameRate() {
+        frameRateJob?.cancel()
+        if (_frameRate.value != null) return
+        frameRateJob = scope.launch {
+            delay(FRAME_RATE_SETTLE_MS)
+            val startFrames = decodedFrames() ?: return@launch
+            val startPosition = player.currentPosition
+            delay(FRAME_RATE_WINDOW_MS)
+            val frames = (decodedFrames() ?: return@launch) - startFrames
+            val mediaMs = player.currentPosition - startPosition
+            if (mediaMs < FRAME_RATE_WINDOW_MS / 2) return@launch
+            val rate = frames * 1_000f / mediaMs
+            Log.i(TAG, "${current?.label}: %.2f fps ($frames frames in $mediaMs ms)".format(rate))
+            _frameRate.value = rate
+        }
+    }
+
+    /** Video frames out of the decoder so far; null for a channel without video. */
+    private fun decodedFrames(): Long? {
+        val video = player.videoDecoderCounters ?: return null
+        video.ensureUpdated()
+        return video.renderedOutputBufferCount.toLong() + video.droppedBufferCount + video.skippedOutputBufferCount
     }
 
     /** Rendered video frames, or for a channel without video the playback position. */
@@ -466,6 +510,8 @@ class PlayerManager @Inject constructor(
         const val FREEZE_CHECK_MS = 1_000L
         const val FREEZE_TIMEOUT_MS = 6_000L
         const val STEADY_MS = 30_000L
+        const val FRAME_RATE_SETTLE_MS = 1_000L
+        const val FRAME_RATE_WINDOW_MS = 3_000L
         val CONTAINER_ERRORS = setOf(
             PlaybackException.ERROR_CODE_PARSING_CONTAINER_UNSUPPORTED,
             PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED,

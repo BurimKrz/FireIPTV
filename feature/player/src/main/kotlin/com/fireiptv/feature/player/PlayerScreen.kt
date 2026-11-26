@@ -1,6 +1,7 @@
 package com.fireiptv.feature.player
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -85,6 +86,20 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
     DisposableEffect(view, streaming) {
         view.keepScreenOn = streaming
         onDispose { view.keepScreenOn = false }
+    }
+    // 25/50 fps channels play at 50 Hz and 30/60 fps at 60 Hz, so every frame stays on screen equally
+    // long. Zaps keep the last rate until the new channel is measured; leaving gives the choice back to the TV.
+    val activity = checkNotNull(LocalActivity.current) { "The player screen must be shown in an activity" }
+    val frameRate by viewModel.frameRate.collectAsStateWithLifecycle()
+    LaunchedEffect(frameRate) {
+        val refreshRate = frameRate?.let(::refreshRateFor) ?: return@LaunchedEffect
+        val display = checkNotNull(view.display) { "The player screen isn't attached to a display" }
+        val mode = displayModeFor(display.supportedModes, display.mode, refreshRate) ?: return@LaunchedEffect
+        if (mode.modeId == display.mode.modeId) return@LaunchedEffect
+        activity.window.attributes = activity.window.attributes.apply { preferredDisplayModeId = mode.modeId }
+    }
+    DisposableEffect(activity) {
+        onDispose { activity.window.attributes = activity.window.attributes.apply { preferredDisplayModeId = 0 } }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onBackground() }
     LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onForeground() }
@@ -246,7 +261,9 @@ private fun Banner(channel: BannerChannel, extras: PlayerExtras, lastZapMs: Long
                     Text("Sleep in $it min", style = MaterialTheme.typography.bodyMedium, color = Color.White)
                 }
                 extras.streamInfo?.let {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f))
+                    // The screen's refresh rate next to the channel's frame rate, e.g. "25 fps · 1.3 Mb/s · 50 Hz".
+                    val refreshRate = checkNotNull(LocalView.current.display) { "The banner isn't attached to a display" }.mode.refreshRate
+                    Text("$it · %.0f Hz".format(refreshRate), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.7f))
                 }
                 // Zap time, shown until Gate 1 is measured on the stick.
                 lastZapMs?.let {
