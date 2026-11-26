@@ -83,7 +83,7 @@ data class PlayerExtras(
     val stopReason: String? = null,
     /** Minutes until the sleep timer stops the stream; null when it's off. */
     val sleepMinutesLeft: Int? = null,
-    /** Resolution and incoming data rate, e.g. "1080p · 6.2 Mb/s"; null until measured. */
+    /** Resolution, frame rate and incoming data rate, e.g. "1080p · 50 fps · 6.2 Mb/s"; null until measured. */
     val streamInfo: String? = null,
 )
 
@@ -106,6 +106,9 @@ class PlayerViewModel @Inject constructor(
     private var zapList: ChannelList = openedFrom
 
     val player: Player get() = playerManager.player
+
+    /** The playing channel's measured frames per second; the screen picks its refresh rate from it. */
+    val frameRate: StateFlow<Float?> get() = playerManager.frameRate
 
     private val banner = MutableStateFlow<BannerChannel?>(null)
     private val bannerTarget = MutableStateFlow<ChannelEntity?>(null)
@@ -310,7 +313,8 @@ class PlayerViewModel @Inject constructor(
                     // Bytes per millisecond × 8 = kilobits per second.
                     "%.1f Mb/s".format((endBytes - startBytes) * 8.0 / (endAt - startAt) / 1_000)
                 }
-                extras.update { it.copy(streamInfo = listOfNotNull(resolution, rate).joinToString(" · ").ifEmpty { null }) }
+                val fps = playerManager.frameRate.value?.let { "%.0f fps".format(it) }
+                extras.update { it.copy(streamInfo = listOfNotNull(resolution, fps, rate).joinToString(" · ").ifEmpty { null }) }
             }
         }
     }
