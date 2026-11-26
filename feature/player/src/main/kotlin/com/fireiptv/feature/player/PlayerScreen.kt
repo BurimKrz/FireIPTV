@@ -87,11 +87,13 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
         view.keepScreenOn = streaming
         onDispose { view.keepScreenOn = false }
     }
-    // 25/50 fps channels play at 50 Hz and 30/60 fps at 60 Hz, so every frame stays on screen equally
-    // long. Zaps keep the last rate until the new channel is measured; leaving gives the choice back to the TV.
+    // With Settings → Match frame rate on, 25/50 fps channels play at 50 Hz and 30/60 fps at 60 Hz, so every
+    // frame stays on screen equally long. Zaps keep the last rate until the new channel is measured; leaving
+    // gives the choice back to the TV.
     val activity = checkNotNull(LocalActivity.current) { "The player screen must be shown in an activity" }
     val frameRate by viewModel.frameRate.collectAsStateWithLifecycle()
     LaunchedEffect(frameRate) {
+        if (!viewModel.matchFrameRate) return@LaunchedEffect
         val refreshRate = frameRate?.let(::refreshRateFor) ?: return@LaunchedEffect
         val display = checkNotNull(view.display) { "The player screen isn't attached to a display" }
         val mode = displayModeFor(display.supportedModes, display.mode, refreshRate) ?: return@LaunchedEffect
@@ -99,7 +101,12 @@ fun PlayerScreen(viewModel: PlayerViewModel = hiltViewModel()) {
         activity.window.attributes = activity.window.attributes.apply { preferredDisplayModeId = mode.modeId }
     }
     DisposableEffect(activity) {
-        onDispose { activity.window.attributes = activity.window.attributes.apply { preferredDisplayModeId = 0 } }
+        onDispose {
+            val attributes = activity.window.attributes
+            if (attributes.preferredDisplayModeId != 0) {
+                activity.window.attributes = attributes.apply { preferredDisplayModeId = 0 }
+            }
+        }
     }
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.onBackground() }
     LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onForeground() }

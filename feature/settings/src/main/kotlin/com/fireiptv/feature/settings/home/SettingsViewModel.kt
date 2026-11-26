@@ -41,6 +41,7 @@ data class SettingsUiState(
     val hiddenGroupCount: Int = 0,
     val startMode: StartMode = StartMode.FAST,
     val logosEnabled: Boolean = true,
+    val matchFrameRate: Boolean = false,
     /** The playlist is an Xtream login, so there are account details to show. */
     val hasAccount: Boolean = false,
     val hiddenChannelCount: Int = 0,
@@ -90,9 +91,9 @@ class SettingsViewModel @Inject constructor(
         combine(
             combine(playlistRepository.playlists, groups, hiddenChannels, ::Triple),
             settings.startMode,
-            settings.logosEnabled,
+            combine(settings.logosEnabled, settings.matchFrameRate, ::Pair),
             accountRepository.available,
-        ) { (playlists, groups, hidden), startMode, logos, hasAccount ->
+        ) { (playlists, groups, hidden), startMode, (logos, matchFrameRate), hasAccount ->
             SettingsUiState(
                 hiddenChannelCount = hidden.size,
                 playlistCount = playlists.size,
@@ -101,6 +102,7 @@ class SettingsViewModel @Inject constructor(
                 hiddenGroupCount = groups.count { it.hidden },
                 startMode = startMode,
                 logosEnabled = logos,
+                matchFrameRate = matchFrameRate,
                 hasAccount = hasAccount,
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
@@ -112,6 +114,10 @@ class SettingsViewModel @Inject constructor(
 
     fun toggleLogos() {
         viewModelScope.launch { settings.setLogosEnabled(!settings.logosEnabled.value) }
+    }
+
+    fun toggleMatchFrameRate() {
+        viewModelScope.launch { settings.setMatchFrameRate(!settings.matchFrameRate.value) }
     }
 
     /** OK on the Updates row: checks, downloads, or returns the installer to start. */

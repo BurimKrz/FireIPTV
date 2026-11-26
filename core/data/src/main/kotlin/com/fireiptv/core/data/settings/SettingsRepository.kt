@@ -49,6 +49,14 @@ class SettingsRepository @Inject constructor(
         .stateIn(scope, SharingStarted.Eagerly, true)
 
     /**
+     * The player asks the screen for 50 Hz on 25/50 fps channels and 60 Hz on 30/60 fps, so frames
+     * aren't shown for uneven times. Off by default: the screen goes black for about a second at each change.
+     */
+    val matchFrameRate: StateFlow<Boolean> = prefs
+        .map { it[MATCH_FRAME_RATE] ?: false }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+
+    /**
      * The playlist home shows, or null for the first one. A plain flow, not a state with a default,
      * so home doesn't flash the first playlist before the saved choice is read.
      */
@@ -66,9 +74,14 @@ class SettingsRepository @Inject constructor(
         store.edit { it[LOGOS_ENABLED] = enabled }
     }
 
+    suspend fun setMatchFrameRate(enabled: Boolean) {
+        store.edit { it[MATCH_FRAME_RATE] = enabled }
+    }
+
     private companion object {
         val START_MODE = stringPreferencesKey("start_mode")
         val LOGOS_ENABLED = booleanPreferencesKey("logos_enabled")
         val ACTIVE_PLAYLIST = longPreferencesKey("active_playlist")
+        val MATCH_FRAME_RATE = booleanPreferencesKey("match_frame_rate")
     }
 }

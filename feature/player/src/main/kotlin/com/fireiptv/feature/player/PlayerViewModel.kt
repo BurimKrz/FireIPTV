@@ -14,6 +14,7 @@ import com.fireiptv.core.data.account.AccountResult
 import com.fireiptv.core.data.channel.ChannelList
 import com.fireiptv.core.data.channel.ChannelRepository
 import com.fireiptv.core.data.db.ChannelEntity
+import com.fireiptv.core.data.settings.SettingsRepository
 import com.fireiptv.core.data.usage.DataUsageRepository
 import com.fireiptv.core.player.PlaybackStatus
 import com.fireiptv.core.player.PlayerManager
@@ -95,6 +96,7 @@ class PlayerViewModel @Inject constructor(
     private val playerManager: PlayerManager,
     private val accounts: AccountRepository,
     private val dataUsage: DataUsageRepository,
+    private val settings: SettingsRepository,
 ) : ViewModel() {
 
     private val startChannelId: Long = checkNotNull(savedStateHandle[ARG_CHANNEL_ID])
@@ -109,6 +111,9 @@ class PlayerViewModel @Inject constructor(
 
     /** The playing channel's measured frames per second; the screen picks its refresh rate from it. */
     val frameRate: StateFlow<Float?> get() = playerManager.frameRate
+
+    /** Settings → Match frame rate; it can't change while the player is open. */
+    val matchFrameRate: Boolean get() = settings.matchFrameRate.value
 
     private val banner = MutableStateFlow<BannerChannel?>(null)
     private val bannerTarget = MutableStateFlow<ChannelEntity?>(null)

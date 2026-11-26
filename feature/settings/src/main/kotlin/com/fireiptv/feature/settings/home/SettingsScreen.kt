@@ -135,6 +135,18 @@ fun SettingsScreen(
             modifier = rowModifier.focusRequester(rows[ROW_LOGOS]),
         )
         SettingRow(
+            title = "Match frame rate: " + if (state.matchFrameRate) "On" else "Off",
+            detail = if (state.matchFrameRate) {
+                "The screen switches to 50 Hz for 25/50 fps channels and 60 Hz for 30/60 fps, for smoother " +
+                    "motion; it goes black for about a second at each switch. OK to turn off."
+            } else {
+                "The screen keeps its own refresh rate: no black flashes, but 25 fps channels may judder " +
+                    "on a 60 Hz screen. OK to turn on."
+            },
+            onClick = { open(ROW_FRAME_RATE, viewModel::toggleMatchFrameRate) },
+            modifier = rowModifier.focusRequester(rows[ROW_FRAME_RATE]),
+        )
+        SettingRow(
             title = "Data used: ${dataSize(usage.todayBytes)} today",
             detail = "${dataSize(usage.monthBytes)} in ${YearMonth.now().month.getDisplayName(TextStyle.FULL, locale)}: " +
                 "everything the app downloaded, counted by the system with no extra requests.",
@@ -238,9 +250,10 @@ private const val ROW_GROUPS = 2
 private const val ROW_HIDDEN = 3
 private const val ROW_START = 4
 private const val ROW_LOGOS = 5
-private const val ROW_DATA = 6
-private const val ROW_BACKUP = 7
-private const val ROW_RESTORE = 8
-private const val ROW_UPDATES = 9
-private const val ROW_LOG = 10
-private const val ROW_COUNT = 11
+private const val ROW_FRAME_RATE = 6
+private const val ROW_DATA = 7
+private const val ROW_BACKUP = 8
+private const val ROW_RESTORE = 9
+private const val ROW_UPDATES = 10
+private const val ROW_LOG = 11
+private const val ROW_COUNT = 12
