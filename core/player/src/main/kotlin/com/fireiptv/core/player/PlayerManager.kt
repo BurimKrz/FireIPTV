@@ -24,8 +24,6 @@ import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
-import androidx.media3.extractor.DefaultExtractorsFactory
-import androidx.media3.extractor.ts.DefaultTsPayloadReaderFactory
 import com.fireiptv.core.log.AppLog
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -147,10 +145,7 @@ class PlayerManager @Inject constructor(
     private var frameRateJob: Job? = null
     private var zapStartedAt = 0L
 
-    private val extractors = DefaultExtractorsFactory().setTsExtractorFlags(
-        // Many IPTV TS streams start without an IDR frame; accept other keyframes so video starts sooner.
-        DefaultTsPayloadReaderFactory.FLAG_ALLOW_NON_IDR_KEYFRAMES or DefaultTsPayloadReaderFactory.FLAG_DETECT_ACCESS_UNITS,
-    )
+    private val extractors = liveTsExtractors()
 
     init {
         connectivity?.registerDefaultNetworkCallback(networkCallback)
