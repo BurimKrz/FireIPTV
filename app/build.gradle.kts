@@ -5,7 +5,7 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
-val appVersion = "1.0.2"
+val appVersion = "1.0.3"
 
 /** FireIPTV Beta's version: push the tag v<betaVersion> and CI publishes it as a GitHub pre-release. */
 val betaVersion = "1.1.0-beta.7"

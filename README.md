@@ -71,6 +71,7 @@ After 3 hours without a key press it asks "Still watching?" and stops the stream
 | Hidden channels | Channels you hid one by one; OK shows one again |
 | Channel start | Fast (starts sooner) or Stable (pauses less on weak Wi-Fi) |
 | Channel logos | On (each downloads once, 50 MB cache) or Off (no logo downloads) |
+| Match frame rate | On: the screen switches to 50 Hz for 25/50 fps channels and 60 Hz for 30/60 fps, so motion is even (the picture goes black for about a second at each change). Off by default |
 | Data used | Today and this month, counted by Fire OS |
 | Back up / Restore | See below |
 | Updates | Checks GitHub, downloads and installs a new version |
