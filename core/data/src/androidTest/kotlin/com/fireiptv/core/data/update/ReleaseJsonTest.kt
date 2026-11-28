@@ -57,14 +57,15 @@ class ReleaseJsonTest {
 
     @Test
     fun betaTakesTheNewestPreRelease() {
-        // A /releases list, newest first: a stable release, then two betas, one without an APK yet.
+        // A /releases list in commit-date order: a stable release, a beta without an APK yet, then
+        // two betas out of version order.
         val beta = JsonReader(StringReader(
             """
             [
               {"tag_name":"v1.0.3","prerelease":false,"assets":[{"name":"FireIPTV-1.0.3.apk","size":1,"browser_download_url":"https://example.com/a.apk"}]},
               {"tag_name":"v1.1.0-beta.3","prerelease":true,"assets":[]},
-              {"tag_name":"v1.1.0-beta.2","prerelease":true,"assets":[{"name":"FireIPTV-Beta-1.1.0-beta.2.apk","size":2,"browser_download_url":"https://example.com/b.apk"}]},
-              {"tag_name":"v1.1.0-beta.1","prerelease":true,"assets":[{"name":"FireIPTV-Beta-1.1.0-beta.1.apk","size":3,"browser_download_url":"https://example.com/c.apk"}]}
+              {"tag_name":"v1.1.0-beta.1","prerelease":true,"assets":[{"name":"FireIPTV-Beta-1.1.0-beta.1.apk","size":3,"browser_download_url":"https://example.com/c.apk"}]},
+              {"tag_name":"v1.1.0-beta.2","prerelease":true,"assets":[{"name":"FireIPTV-Beta-1.1.0-beta.2.apk","size":2,"browser_download_url":"https://example.com/b.apk"}]}
             ]
             """,
         )).use { readNewestBeta(it) }

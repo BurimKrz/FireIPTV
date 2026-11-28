@@ -249,15 +249,16 @@ class UpdateRepository @Inject constructor(
 internal fun readRelease(reader: JsonReader): Release? = readReleaseObject(reader).first
 
 /**
- * From a `/releases` list (newest first), the first pre-release with a `-beta.` tag and an APK;
- * null when there is none.
+ * From a `/releases` list, the pre-release with the highest `-beta.` version and an APK; null when
+ * there is none. GitHub orders the list by the tagged commit's date, not by version.
  */
 internal fun readNewestBeta(reader: JsonReader): Release? {
     var newest: Release? = null
     reader.beginArray()
     while (reader.hasNext()) {
         val (release, prerelease) = readReleaseObject(reader)
-        if (newest == null && prerelease && release != null && "-beta." in release.version) newest = release
+        val beta = release?.takeIf { prerelease && "-beta." in it.version }
+        if (beta != null && (newest == null || isNewer(beta.version, newest.version))) newest = beta
     }
     reader.endArray()
     return newest

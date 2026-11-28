@@ -145,6 +145,13 @@ class ChannelRepository @Inject constructor(db: PlayerDatabase) {
         return !hidden
     }
 
+    /** Hides the channel; one already hidden stays hidden. */
+    suspend fun hideChannel(channelId: Long) {
+        val channel = channelDao.get(channelId) ?: return
+        if (libraryDao.observeIsHidden(channel.playlistId, channel.streamUrl).first()) return
+        libraryDao.hide(HiddenChannelEntity(channel.playlistId, channel.streamUrl, channel.name, System.currentTimeMillis()))
+    }
+
     suspend fun showChannel(playlistId: Long, streamUrl: String) = libraryDao.unhide(playlistId, streamUrl)
 
     suspend fun showAllChannels(playlistId: Long) = libraryDao.unhideAll(playlistId)

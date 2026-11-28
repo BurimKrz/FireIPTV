@@ -93,6 +93,7 @@ class BackupRepository @Inject constructor(
                 json.name("settings").beginObject()
                 json.name("startMode").value(settings.startMode.value.name)
                 json.name("logos").value(settings.logosEnabled.value)
+                json.name("matchFrameRate").value(settings.matchFrameRate.value)
                 json.endObject()
                 json.name("favorites").beginArray()
                 favorites.forEach { json.beginObject().name("url").value(it.streamUrl).name("name").value(it.name).name("order").value(it.sortOrder).endObject() }
@@ -193,6 +194,7 @@ class BackupRepository @Inject constructor(
         }
         backup.startMode?.let { settings.setStartMode(it) }
         backup.logos?.let { settings.setLogosEnabled(it) }
+        backup.matchFrameRate?.let { settings.setMatchFrameRate(it) }
         return BackupSummary(backup.favorites.size, backup.categories.size, backup.hiddenGroups.size, backup.hiddenChannels.size, added)
     }
 
@@ -285,6 +287,7 @@ class BackupRepository @Inject constructor(
         val playlist: Source?,
         val startMode: StartMode?,
         val logos: Boolean?,
+        val matchFrameRate: Boolean?,
         val favorites: List<Entry>,
         val categories: List<Category>,
         val hiddenGroups: List<String>,
@@ -297,6 +300,7 @@ class BackupRepository @Inject constructor(
         var playlist: Source? = null
         var startMode: StartMode? = null
         var logos: Boolean? = null
+        var matchFrameRate: Boolean? = null
         var favorites = emptyList<Entry>()
         var categories = emptyList<Category>()
         var hiddenGroups = emptyList<String>()
@@ -317,6 +321,7 @@ class BackupRepository @Inject constructor(
                         when (json.nextName()) {
                             "startMode" -> json.nextString().let { name -> startMode = StartMode.entries.firstOrNull { it.name == name } }
                             "logos" -> logos = json.nextBoolean()
+                            "matchFrameRate" -> matchFrameRate = json.nextBoolean()
                             else -> json.skipValue()
                         }
                     }
@@ -354,7 +359,7 @@ class BackupRepository @Inject constructor(
         }
         json.endObject()
         if (app != "FireIPTV") throw IllegalArgumentException("not a FireIPTV backup")
-        Backup(playlist, startMode, logos, favorites, categories, hiddenGroups, pinnedGroups, hiddenChannels)
+        Backup(playlist, startMode, logos, matchFrameRate, favorites, categories, hiddenGroups, pinnedGroups, hiddenChannels)
     }
 
     private fun <T> JsonReader.readList(item: JsonReader.() -> T): List<T> {

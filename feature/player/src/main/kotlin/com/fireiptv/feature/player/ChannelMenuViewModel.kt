@@ -62,6 +62,6 @@ class ChannelMenuViewModel @Inject constructor(private val channels: ChannelRepo
 
     fun hide() {
         val id = channelId.value ?: return
-        viewModelScope.launch { channels.toggleHidden(id) }
+        viewModelScope.launch { channels.hideChannel(id) }
     }
 }
